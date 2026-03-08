@@ -286,6 +286,13 @@ function toggleAdvanced() {
   document.getElementById('poi-cats-sec')?.classList.toggle('sec-hidden', advancedMode);
   document.getElementById('poi-res-sec')?.classList.toggle('sec-hidden', advancedMode);
 
+  // V pokročilém režimu: vymaž search input + výsledky (POI search nedává smysl)
+  if (advancedMode) {
+    const si = document.getElementById('search-inp');
+    if (si) si.value = '';
+    if (typeof doSearch === 'function') doSearch('');
+  }
+
   // Stats panel — jen pokročilý (desktop + mobile)
   document.getElementById('stats-panel')?.classList.toggle('adv-show', advancedMode);
 

@@ -191,9 +191,9 @@ async function confirmNav() {
       fetch(`${OSRM_BASE}/walking/${coord}${params}`),
     ]);
     _fetchedDriveRoute = dr.status === 'fulfilled' && dr.value.ok
-      ? (await dr.value.json()).routes?.[0] : null;
+      ? ((await dr.value.json()).routes?.[0] ?? null) : null;
     _fetchedWalkRoute  = wr.status === 'fulfilled' && wr.value.ok
-      ? (await wr.value.json()).routes?.[0]  : null;
+      ? ((await wr.value.json()).routes?.[0] ?? null) : null;
   } catch(e) {
     console.error('nav fetch:', e);
   }
@@ -301,20 +301,38 @@ function cancelModePicker() {
 async function pickNavMode(mode) {
   document.getElementById('nav-mode-picker')?.classList.remove('on');
   _navMode = mode;
-  const t  = _fetchedTarget;
+  const t = _fetchedTarget;
   if (!t) return;
-  await _startNav(t.lat, t.lng, t.name, mode);
+
+  // DŮLEŽITÉ: zachyť trasy PŘED voláním _startNav,
+  // protože clearNav() uvnitř je vymaže dřív, než je použijeme
+  const savedDrive = _fetchedDriveRoute;
+  const savedWalk  = _fetchedWalkRoute;
+
+  await _startNav(t.lat, t.lng, t.name, mode, savedDrive, savedWalk);
 }
 
 // ════════════════════════════════════════════════════════════════
 //  START NAVIGACE
 // ════════════════════════════════════════════════════════════════
-async function _startNav(tLat, tLng, tName, mode) {
-  clearNav();
+async function _startNav(tLat, tLng, tName, mode, driveRoute, walkRoute) {
+  // Zachyť trasy jako opravdové lokální proměnné (null pokud undefined)
+  // MUSÍ být před clearNav(), který nuluje všechny globální proměnné
+  const _dr = (driveRoute ?? _fetchedDriveRoute) ?? null;
+  const _wr = (walkRoute  ?? _fetchedWalkRoute)  ?? null;
+
+  clearNav();  // nuluje _navMode, _fetchedDriveRoute, _fetchedWalkRoute, atd.
+
+  // Obnov _navMode — clearNav() ho smazal, potřebujeme ho pro _onTrack a _redrawProgress
+  _navMode = mode;
+
   if (typeof hideGeoVisuals === 'function') hideGeoVisuals();
 
-  const route = mode === 'driving' ? _fetchedDriveRoute : _fetchedWalkRoute;
-  if (!route) { badge('❌ Trasa nedostupná pro zvolený způsob'); return; }
+  const route = mode === 'driving' ? _dr : _wr;
+  if (!route) {
+    badge('❌ Trasa nenalezena — vyber cíl znovu');
+    return;
+  }
 
   if (!map.getPane('navPane')) {
     map.createPane('navPane');
@@ -323,11 +341,11 @@ async function _startNav(tLat, tLng, tName, mode) {
 
   const coords = _geoToLatLng(route.geometry);
   if (mode === 'driving') {
-    _driveFullCoords  = coords;
-    _walkFullCoords   = _fetchedWalkRoute ? _geoToLatLng(_fetchedWalkRoute.geometry) : [];
+    _driveFullCoords = coords;
+    _walkFullCoords  = _wr ? _geoToLatLng(_wr.geometry) : [];
   } else {
-    _walkFullCoords   = coords;
-    _driveFullCoords  = _fetchedDriveRoute ? _geoToLatLng(_fetchedDriveRoute.geometry) : [];
+    _walkFullCoords  = coords;
+    _driveFullCoords = _dr ? _geoToLatLng(_dr.geometry) : [];
   }
   _activeFullCoords = coords;
 
@@ -400,16 +418,18 @@ async function navigateTo(tLat, tLng, tName) {
       fetch(`${OSRM_BASE}/driving/${coord}${params}`),
       fetch(`${OSRM_BASE}/walking/${coord}${params}`),
     ]);
-    _fetchedDriveRoute = dr.status === 'fulfilled' && dr.value.ok ? (await dr.value.json()).routes?.[0] : null;
-    _fetchedWalkRoute  = wr.status === 'fulfilled' && wr.value.ok ? (await wr.value.json()).routes?.[0] : null;
+    _fetchedDriveRoute = dr.status === 'fulfilled' && dr.value.ok ? ((await dr.value.json()).routes?.[0] ?? null) : null;
+    _fetchedWalkRoute  = wr.status === 'fulfilled' && wr.value.ok ? ((await wr.value.json()).routes?.[0] ?? null) : null;
   } catch(e) { cancelModePicker(); badge('❌ Chyba trasy'); return; }
 
   const wc = _fetchedWalkRoute ? _geoToLatLng(_fetchedWalkRoute.geometry) : [];
   const wd = _polyLen(wc);
   const wt = wd > 0 ? Math.round(wd / WALK_SPEED_MS) : (_fetchedWalkRoute?.duration ?? null);
+  // Uloži reference před fillModePicker, pickNavMode je pak dostane přes parametry
   _fillModePicker(
     _fetchedDriveRoute?.duration ?? null, _fetchedDriveRoute?.distance ?? null,
     wt, wd || (_fetchedWalkRoute?.distance ?? null));
+  // _fetchedDriveRoute/_fetchedWalkRoute zůstanou nastavené pro pickNavMode
 }
 
 // ════════════════════════════════════════════════════════════════

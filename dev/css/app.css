@@ -798,7 +798,8 @@ body.nav-on #dbadge { display: none !important; }
   body.adv-on #mob-cat-icons  { display: none !important; }
   body.adv-on #mob-srch-btn   { display: none !important; }
   body.adv-on #mob-search     { display: none !important; }
-  /* mob-bs-top zůstane — jen bude bez ikon (jen pill) */
+  /* V pokročilém režimu: BS peek pruh smrskne na pouhý pill — bez min-height pro ikony */
+  body.adv-on #mob-bs-top     { min-height: auto !important; padding-bottom: 4px !important; }
 
   /* Kategorie chips — skryté v mobilním BS (filtry jsou v peek ikonách) */
   #poi-cats-sec { display: none !important; }
@@ -825,6 +826,8 @@ body.nav-on #dbadge { display: none !important; }
 @media (min-width: 769px) {
   .mob-only  { display: none !important; }
   .desk-only { display: flex !important; }
+  /* V pokročilém režimu: schovej search bar — není potřeba hledat POI */
+  body.adv-on .sb-head { display: none !important; }
 }
 
 /* ════════════════════════════════════════════════════════════════
