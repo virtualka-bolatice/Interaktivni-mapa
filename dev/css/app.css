@@ -181,7 +181,7 @@ header {
 }
 .sb-lbl  {
   font-size: .6rem; letter-spacing: 1.5px; text-transform: uppercase;
-  color: var(--muted); margin-bottom: 6px; text-align: center; display: block;
+  color: var(--muted); margin-bottom: 6px; text-align: left; display: block;
 }
 .sb-search { position: relative; }
 .sb-search input {
