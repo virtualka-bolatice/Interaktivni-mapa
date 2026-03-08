@@ -207,7 +207,7 @@ function geolocate() {
   }
 
   btn?.classList.add('on');
-  badge('📍 Hledám přesnou polohu…');
+  // Žádný badge — zpřesňování probíhá tiše v pozadí
 
   // watchPosition — browser posílá aktualizace jak se poloha zpřesňuje
   _geoWatchId = navigator.geolocation.watchPosition(

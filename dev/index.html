@@ -42,10 +42,27 @@
   </div>
   <div class="nav-actions">
     <button class="nav-act-btn" id="nav-follow-btn" onclick="toggleNavFollow()" title="Sledovat polohu">
-      <span id="nav-follow-ico">⊙</span> Sledovat
+      <svg width="11" height="11" viewBox="0 0 12 12" fill="none" style="flex-shrink:0">
+        <circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.5"/>
+        <circle cx="6" cy="6" r="1.5" fill="currentColor"/>
+      </svg>
+      Sledovat
+    </button>
+    <button class="nav-act-btn nav-act-compass" id="nav-persp-btn" onclick="togglePerspMode()" title="Perspektivní pohled ve směru jízdy">
+      <svg id="nav-compass-svg" width="16" height="16" viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"/>
+        <polygon points="12,3 14.5,12 12,10 9.5,12" fill="#ef4444"/>
+        <polygon points="12,21 14.5,12 12,14 9.5,12" fill="currentColor" opacity=".5"/>
+        <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
+      </svg>
     </button>
     <button class="nav-act-btn" id="nav-recenter-btn2" onclick="navRecenter()" title="Vycentrovat">
-      ⊕ Vycentrovat
+      <svg width="11" height="11" viewBox="0 0 12 12" fill="none" style="flex-shrink:0">
+        <rect x="1" y="1" width="10" height="10" rx="2" stroke="currentColor" stroke-width="1.4"/>
+        <line x1="6" y1="1" x2="6" y2="11" stroke="currentColor" stroke-width="1.2"/>
+        <line x1="1" y1="6" x2="11" y2="6" stroke="currentColor" stroke-width="1.2"/>
+      </svg>
+      Vycentrovat
     </button>
   </div>
   <div id="nav-geo-status">📍 Hledám přesnou polohu…</div>
