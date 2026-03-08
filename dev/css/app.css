@@ -40,8 +40,21 @@ html, body {
 }
 
 /* ── LAYOUT ── */
+/* ── Layout ─────────────────────────────────────────────────────── */
 #app  { display: flex; flex-direction: column; height: 100vh; }
-#map  { flex: 1; z-index: 1; }
+
+/* tilt-wrap: obal mapy — flex:1 na desktopu, overflow:hidden klipuje černé rohy při tiltu */
+#tilt-wrap {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  z-index: 1;
+}
+/* #map uvnitř tilt-wrap — vždy vyplní celý tilt-wrap */
+#map {
+  position: absolute;
+  inset: 0;
+}
 
 /* ════════════════════════════════════════════════════════════════
    LOADING
@@ -422,13 +435,8 @@ body.nav-on #dbadge { display: none !important; }
 }
 .nav-dist { font-size: .7rem; color: var(--muted); }
 
-/* Geo status — bez blikání, jen prostý text */
-#nav-geo-status {
-  display: none; font-size: .63rem; color: var(--muted);
-  text-align: center; padding-top: 4px;
-  border-top: 1px solid var(--border); margin-top: 6px;
-}
-#nav-geo-status.on { display: block; }
+/* Geo status — kompletně skrytý (zpřesňování tiché v pozadí) */
+#nav-geo-status { display: none !important; }
 
 .nav-actions { display: flex; gap: 5px; }
 .nav-act-btn {
@@ -459,20 +467,19 @@ body.nav-on #dbadge { display: none !important; }
 
 /* ════════════════════════════════════════════════════════════════
    MAP TILT — perspektivní pohled ve směru jízdy
-   Aplikuje se na #map kontejner, ne na okolní UI
+   transform-origin je nastavena JS v pixelech (not %) aby seděla
+   na správnou výškovou pozici i uvnitř tilt-wrap
    ════════════════════════════════════════════════════════════════ */
+
+/* Nav-tilt: statický stav — BEZ transition (nechceme jitter každý GPS update) */
 #map.nav-tilt {
-  /* transform-origin v dolní čtvrtině — poloha zůstane dole */
-  transform-origin: center 72%;
-  /* perspective + tilt; rotace (heading) přidána JS inline style */
   will-change: transform;
-  /* Leaflet tiles jsou pixel-perfect při CSS scale — plynulý přechod */
-  transition: transform .35s cubic-bezier(.4,0,.2,1);
+  /* transform a transform-origin nastaveny JS inline */
 }
-/* Při přechodu zpět do top-down — plynulý reset */
-#map.nav-tilt-off {
-  transition: transform .35s cubic-bezier(.4,0,.2,1);
-  transform: none !important;
+
+/* Tilt-entering: přechod při zapnutí / vypnutí perspektivního módu (jen 400ms) */
+#map.tilt-entering {
+  transition: transform .38s cubic-bezier(.4,0,.2,1) !important;
 }
 
 /* ════════════════════════════════════════════════════════════════
@@ -719,7 +726,8 @@ body.nav-on #dbadge { display: none !important; }
   .logo { font-size: .9rem; }
 
   /* Map fills full area, BS overlaps */
-  #map { position: absolute; inset: 0; top: var(--hdr); }
+  #tilt-wrap { position: absolute; inset: 0; top: var(--hdr); flex: none; }
+  #map        { position: absolute; inset: 0; }
   #app { height: 100vh; }
 
   /* ── SIDEBAR → BOTTOM SHEET — transform řídí JS ── */

@@ -347,6 +347,11 @@ function toggleCat(k) {
   renderResults();
   renderMobCatIcons();
   renderMobSubcats();
+
+  // Na mobilu: vyjeď BS nahoru plynule (výsledky jsou viditelné)
+  if (typeof isMobile === 'function' && isMobile()) {
+    expandBS();
+  }
 }
 
 function toggleSub(k) {

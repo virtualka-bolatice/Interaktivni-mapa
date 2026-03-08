@@ -65,7 +65,6 @@
       Vycentrovat
     </button>
   </div>
-  <div id="nav-geo-status">📍 Hledám přesnou polohu…</div>
 </div>
 
 <!-- ══ MODE PICKER — výběr způsobu dopravy ═════════════════════ -->
@@ -127,7 +126,10 @@
     <div id="mob-results"></div>
   </div>
 
-  <div id="map"></div>
+  <!-- #tilt-wrap: perspective container, overflow:hidden klipuje černé hrany při tiltu -->
+  <div id="tilt-wrap">
+    <div id="map"></div>
+  </div>
 </div>
 
 <!-- ══ SIDEBAR / BOTTOM SHEET ════════════════════════════════════

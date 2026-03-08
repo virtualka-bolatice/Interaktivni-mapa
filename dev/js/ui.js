@@ -237,20 +237,7 @@ function _onGeoUpdate(pos) {
   // Zobraz nav tlačítko při prvním fixu
   document.getElementById('nav-pick-btn')?.classList.add('on');
 
-  // V navigaci: zobraz "Hledám přesnou polohu" v nav-geo-status widgetu,
-  // schovat jakmile je přesnost dostatečná
-  if (document.body.classList.contains('nav-on')) {
-    const gs = document.getElementById('nav-geo-status');
-    if (gs) {
-      if (acc <= GEO_MAX_ACCURACY) {
-        gs.classList.remove('on');
-      } else {
-        gs.textContent = '📍 Hledám přesnou polohu…';
-        gs.classList.add('on');
-      }
-    }
-  }
-  // Mimo navigaci: žádné badge hlášky o přesnosti polohy
+  // Zpřesňování polohy je tiché — žádné badge, žádné hlášky
 }
 
 function _updateGeoMarker(lat, lng, acc) {

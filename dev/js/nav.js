@@ -393,8 +393,6 @@ async function _startNav(tLat, tLng, tName, mode, driveRoute, walkRoute) {
   _startTracking(tLat, tLng, tName);
 
   document.getElementById('fab-nav')?.classList.add('on');
-  // geo-status schovat až po získání první polohy (ui.js _onGeoUpdate to řídí)
-  // badge schován body.nav-on — použijeme nav-geo-status
 }
 
 // Volatelná z POI popupu (zpětná kompatibilita)
@@ -507,86 +505,137 @@ function _updateWidget(remSec, remDist) {
 // ════════════════════════════════════════════════════════════════
 //  PERSPEKTIVNÍ POHLED — tilt + heading rotace
 //
-//  Implementace: CSS transform na #map kontejneru
-//    perspective(900px) rotateX(52deg) rotateZ(-heading)
-//  transform-origin: center 72% → poloha zůstane v dolní čtvrtině
+//  Architektura:
+//    - #tilt-wrap: obal s overflow:hidden → klipuje černé rohy
+//    - #map: transformovaný element (rotateX + rotateZ inline style)
+//    - transform-origin nastavena v px (ne %), přesně na 72% výšky
+//      tilt-wrap, bez ohledu na offset #map uvnitř wrapperu
 //
-//  Centrum mapy je offsetováno dopředu od polohy uživatele,
-//  aby uživatel byl vidět v dolní čtvrtině viewportu.
+//  Azimut (heading):
+//    - GPS heading pokud k dispozici a rychlost > 0.5 m/s
+//    - Fallback: bearing z trasy (5 bodů dopředu)
+//    - Exponenciální smoothing α=0.25 (potlačí GPS šum)
+//    - Throttle: CSS transform se mění jen při změně > 2° nebo >3m
 //
-//  Fallback heading: pokud GPS heading není k dispozici (stojíme,
-//  nebo zařízení bez kompasu), vypočítáme bearing z trasy.
+//  Tile loading:
+//    - keepBuffer=10 → Leaflet přednačte dlaždice daleko za viewport
+//    - map.invalidateSize() při vstupu/výstupu z tiltu
+//    - _forwardCenter: centrum mapy 160m dopředu od polohy uživatele
+//
+//  Plynulost:
+//    - ŽÁDNÁ CSS transition při GPS updatech (#map.nav-tilt bez transition)
+//    - CSS transition POUZE při toggle módu (#map.tilt-entering, 380ms)
+//    - map.setView s animate:true, duration:0.5 pro plynulé sledování
 // ════════════════════════════════════════════════════════════════
 
-let _perspMode   = false;   // true = tilt pohled, false = top-down
-let _lastValidHdg = 0;      // poslední platný heading (nebo route bearing)
+let _perspMode    = false;
+let _lastValidHdg = 0;
 
-// Tilt + perspektiva parametry
-const _TILT_DEG   = 52;     // stupeň náklonu (jako Google Maps ~50-55°)
-const _PERSP_PX   = 900;    // CSS perspective v pixelech
-const _FWD_OFFSET = 160;    // metry dopředu od polohy pro centrum mapy
-const _ZOOM_TILT  = 17;     // zoom úroveň v perspektivním pohledu
-const _ZOOM_TOP   = 16;     // zoom úroveň v top-down pohledu
+// Poslední tilt-update hodnoty (throttle)
+let _lastTiltLat  = null;
+let _lastTiltLng  = null;
+let _lastTiltHdg  = null;
 
-// ── Bearing z trasy (fallback když GPS heading = null) ───────────
-// Vrátí azimut ze současné polohy na bod N kroků dál na trase
+const _TILT_DEG    = 50;    // stupeň náklonu
+const _PERSP_PX    = 1400;  // CSS perspective (vyšší = méně zkreslení)
+const _FWD_OFFSET  = 140;   // m dopředu pro centrum mapy
+const _ZOOM_TILT   = 17;
+const _ZOOM_TOP    = 16;
+const _MIN_HDG_CHG = 2;     // ° — min změna headingu pro redraw
+const _MIN_POS_CHG = 3;     // m — min pohyb pro redraw
+
+// ── Bearing z trasy (fallback bez GPS heading) ───────────────────
 function _routeBearing(posLat, posLng) {
   if (_activeFullCoords.length < 2) return _lastValidHdg;
   const { idx } = _trimRoute(_activeFullCoords, posLat, posLng);
-  // Vezmi bod 5 kroků dopředu (nebo poslední)
-  const lookAhead = Math.min(idx + 5, _activeFullCoords.length - 1);
-  if (lookAhead <= idx) return _lastValidHdg;
-  const [lat2, lng2] = _activeFullCoords[lookAhead];
+  const ahead = Math.min(idx + 6, _activeFullCoords.length - 1);
+  if (ahead <= idx) return _lastValidHdg;
+  const [lat2, lng2] = _activeFullCoords[ahead];
   const dLng = (lng2 - posLng) * Math.PI / 180;
-  const lat1r = posLat * Math.PI / 180;
-  const lat2r = lat2   * Math.PI / 180;
-  const y = Math.sin(dLng) * Math.cos(lat2r);
-  const x = Math.cos(lat1r)*Math.sin(lat2r) - Math.sin(lat1r)*Math.cos(lat2r)*Math.cos(dLng);
+  const φ1 = posLat * Math.PI / 180;
+  const φ2 = lat2   * Math.PI / 180;
+  const y  = Math.sin(dLng) * Math.cos(φ2);
+  const x  = Math.cos(φ1)*Math.sin(φ2) - Math.sin(φ1)*Math.cos(φ2)*Math.cos(dLng);
   return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
 }
 
-// ── Offset centrum mapy dopředu od polohy ───────────────────────
-// Vrátí [lat, lng] bodu X metrů ve směru headingu
-function _forwardCenter(lat, lng, headingDeg, distM) {
-  const R   = 6371000;
-  const d   = distM / R;
-  const h   = headingDeg * Math.PI / 180;
-  const φ1  = lat * Math.PI / 180;
-  const λ1  = lng * Math.PI / 180;
-  const φ2  = Math.asin(Math.sin(φ1)*Math.cos(d) + Math.cos(φ1)*Math.sin(d)*Math.cos(h));
-  const λ2  = λ1 + Math.atan2(Math.sin(h)*Math.sin(d)*Math.cos(φ1),
+// ── Offset centrum mapy dopředu ──────────────────────────────────
+function _forwardCenter(lat, lng, hdgDeg, distM) {
+  const R  = 6371000;
+  const d  = distM / R;
+  const h  = hdgDeg * Math.PI / 180;
+  const φ1 = lat * Math.PI / 180;
+  const λ1 = lng * Math.PI / 180;
+  const φ2 = Math.asin(Math.sin(φ1)*Math.cos(d) + Math.cos(φ1)*Math.sin(d)*Math.cos(h));
+  const λ2 = λ1 + Math.atan2(Math.sin(h)*Math.sin(d)*Math.cos(φ1),
                                Math.cos(d) - Math.sin(φ1)*Math.sin(φ2));
   return [φ2 * 180/Math.PI, λ2 * 180/Math.PI];
 }
 
-// ── Aplikuj/obnov CSS transform na mapě ─────────────────────────
-function _applyMapTransform(headingDeg) {
-  const mc = map.getContainer();
-  if (_perspMode) {
-    mc.style.transformOrigin = 'center 72%';
-    mc.style.transform =
-      `perspective(${_PERSP_PX}px) rotateX(${_TILT_DEG}deg) rotateZ(${-headingDeg}deg)`;
-    mc.classList.add('nav-tilt');
-    mc.classList.remove('nav-tilt-off');
-  } else {
-    _resetMapTransform();
-  }
+// ── transform-origin v pixelech (přesné na výšce wrapperu) ──────
+// Pivot = 72% výšky tilt-wrap → uživatel visí v dolní čtvrtině
+function _pivotOrigin() {
+  const wrap = document.getElementById('tilt-wrap');
+  if (!wrap) return 'center 72%';
+  const wH = wrap.offsetHeight;
+  return `50% ${Math.round(wH * 0.72)}px`;
 }
 
-function _resetMapTransform() {
+// ── Aplikuj inline transform (BEZ CSS transition) ────────────────
+function _applyMapTransform(hdgDeg) {
   const mc = map.getContainer();
-  mc.classList.remove('nav-tilt');
-  mc.classList.add('nav-tilt-off');
+  mc.style.transformOrigin = _pivotOrigin();
+  mc.style.transform =
+    `perspective(${_PERSP_PX}px) rotateX(${_TILT_DEG}deg) rotateZ(${-hdgDeg}deg)`;
+}
+
+// ── Vstup do perspektivního módu ─────────────────────────────────
+function _enterTiltMode(hdgDeg) {
+  const mc = map.getContainer();
+
+  // Zvyš keepBuffer — načte dlaždice daleko za viewport (redukuje černé oblasti)
+  map.options.keepBuffer = 10;
+
+  // Plynulý přechod: přidej tilt-entering na 380ms
+  mc.classList.add('nav-tilt', 'tilt-entering');
+  setTimeout(() => mc.classList.remove('tilt-entering'), 400);
+
+  _applyMapTransform(hdgDeg);
+
+  // Obnov tiles pro nový viewport
+  map.invalidateSize({ pan: false });
+}
+
+// ── Výstup z perspektivního módu ─────────────────────────────────
+function _exitTiltMode() {
+  const mc = map.getContainer();
+
+  mc.classList.add('tilt-entering');
   mc.style.transformOrigin = '';
   mc.style.transform = '';
-  // Po doběhnutí CSS transition odeber třídu
-  setTimeout(() => mc.classList.remove('nav-tilt-off'), 380);
+
+  setTimeout(() => {
+    mc.classList.remove('nav-tilt', 'tilt-entering');
+    map.options.keepBuffer = 2; // obnov výchozí
+    map.invalidateSize({ pan: false });
+  }, 400);
 }
 
-// ── Aktualizuj kompas SVG dle headingu ──────────────────────────
-function _updateCompassIcon(headingDeg) {
+// ── Kompas SVG ikona ─────────────────────────────────────────────
+function _updateCompassIcon(hdgDeg) {
   const svg = document.getElementById('nav-compass-svg');
-  if (svg) svg.style.transform = `rotate(${headingDeg}deg)`;
+  if (svg) svg.style.transform = `rotate(${hdgDeg}deg)`;
+}
+
+// ── Throttle check ───────────────────────────────────────────────
+function _tiltNeedsUpdate(lat, lng, hdg) {
+  if (_lastTiltLat === null) return true;
+  const dHdg = Math.min(
+    Math.abs(hdg - _lastTiltHdg),
+    360 - Math.abs(hdg - _lastTiltHdg)
+  );
+  const dPos = _haversine([lat, lng], [_lastTiltLat, _lastTiltLng]);
+  return dHdg > _MIN_HDG_CHG || dPos > _MIN_POS_CHG;
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -594,20 +643,18 @@ function _updateCompassIcon(headingDeg) {
 // ════════════════════════════════════════════════════════════════
 function togglePerspMode() {
   _perspMode = !_perspMode;
-  const btn  = document.getElementById('nav-persp-btn');
-  if (btn) btn.classList.toggle('persp-on', _perspMode);
+  document.getElementById('nav-persp-btn')?.classList.toggle('persp-on', _perspMode);
 
   if (_perspMode) {
-    // Přejdi do perspektivního pohledu
+    _lastTiltLat = _lastTiltLng = _lastTiltHdg = null; // reset throttle
+    _enterTiltMode(_lastValidHdg);
     const pos = (typeof getGeoLatLng === 'function') ? getGeoLatLng() : null;
     if (pos) {
-      _applyMapTransform(_lastValidHdg);
       const ctr = _forwardCenter(pos.lat, pos.lng, _lastValidHdg, _FWD_OFFSET);
       map.setView(ctr, _ZOOM_TILT, { animate: true, duration: 0.4 });
     }
   } else {
-    // Zpět do top-down
-    _resetMapTransform();
+    _exitTiltMode();
     const pos = (typeof getGeoLatLng === 'function') ? getGeoLatLng() : null;
     if (pos) map.setView([pos.lat, pos.lng], _ZOOM_TOP, { animate: true, duration: 0.4 });
   }
@@ -619,9 +666,9 @@ function togglePerspMode() {
 function _setFollow(on) {
   _followMode = on;
   _mapMoved   = false;
-  const btn   = document.getElementById('nav-follow-btn');
-  const rc    = document.getElementById('nav-recenter-btn');
-  const rc2   = document.getElementById('nav-recenter-btn2');
+  const btn = document.getElementById('nav-follow-btn');
+  const rc  = document.getElementById('nav-recenter-btn');
+  const rc2 = document.getElementById('nav-recenter-btn2');
   if (btn) btn.classList.toggle('follow-on', on);
   if (rc)  rc.classList.toggle('on', !on);
   if (rc2) rc2.classList.toggle('on', !on);
@@ -629,6 +676,7 @@ function _setFollow(on) {
     const pos = (typeof getGeoLatLng === 'function') ? getGeoLatLng() : null;
     if (pos) {
       if (_perspMode) {
+        _lastTiltLat = _lastTiltLng = _lastTiltHdg = null; // force update
         _applyMapTransform(_lastValidHdg);
         const ctr = _forwardCenter(pos.lat, pos.lng, _lastValidHdg, _FWD_OFFSET);
         map.setView(ctr, _ZOOM_TILT, { animate: true, duration: 0.4 });
@@ -647,43 +695,36 @@ function _onMapDrag() {
   if (_followMode) {
     _followMode = false;
     _mapMoved   = true;
-    // Drag zruší i perspektivní pohled (mapu uživatel přebral)
-    if (_perspMode) _resetMapTransform();
+    // Drag zruší follow — perspektiva vizuálně zůstane ale přestane sledovat
     document.getElementById('nav-follow-btn')?.classList.remove('follow-on');
-    document.getElementById('nav-persp-btn')?.classList.remove('persp-on');
     document.getElementById('nav-recenter-btn')?.classList.add('on');
     document.getElementById('nav-recenter-btn2')?.classList.add('on');
   }
 }
 
-// ── Heading marker (šipka směru jízdy) ───────────────────────────
-function _buildHeadingIcon(headingDeg, mode) {
+// ── Heading marker ───────────────────────────────────────────────
+function _buildHeadingIcon(hdgDeg, mode) {
   const color = mode === 'driving' ? '#3b82f6' : '#10b981';
-  // V perspektivním pohledu marker nerotujeme (mapa rotuje za nás),
-  // v top-down rotujeme šipku dle headingu
-  const rot = _perspMode ? 0 : (headingDeg ?? 0);
+  // V perspektivním pohledu mapa rotuje → marker vždy ukazuje "nahoru" (= dopředu)
+  // V top-down pohledu marker rotuje dle headingu
+  const rot = _perspMode ? 0 : (hdgDeg ?? 0);
   return L.divIcon({
-    html: `<div style="
-      width:22px;height:22px;
-      display:flex;align-items:center;justify-content:center;
-      transform:rotate(${rot}deg);
-      filter:drop-shadow(0 0 5px ${color}cc);
-    ">
+    html: `<div style="width:22px;height:22px;display:flex;align-items:center;
+             justify-content:center;transform:rotate(${rot}deg);
+             filter:drop-shadow(0 0 5px ${color}cc)">
       <svg viewBox="0 0 22 22" width="22" height="22">
         <circle cx="11" cy="11" r="10" fill="${color}" opacity=".18"/>
         <circle cx="11" cy="11" r="5"  fill="${color}" stroke="#fff" stroke-width="2"/>
         <polygon points="11,2 13.2,11 11,9 8.8,11" fill="#fff" opacity=".9"/>
-      </svg>
-    </div>`,
+      </svg></div>`,
     className: '', iconSize: [22,22], iconAnchor: [11,11],
   });
 }
 
-function _updatePosMarker(lat, lng, headingDeg) {
-  const ico = _buildHeadingIcon(headingDeg, _navMode);
+function _updatePosMarker(lat, lng, hdgDeg) {
+  const ico = _buildHeadingIcon(hdgDeg, _navMode);
   if (!_posMarker) {
-    _posMarker = L.marker([lat, lng], { icon: ico, pane: 'navPane', zIndexOffset: 900 })
-      .addTo(map);
+    _posMarker = L.marker([lat, lng], { icon: ico, pane: 'navPane', zIndexOffset: 900 }).addTo(map);
   } else {
     _posMarker.setLatLng([lat, lng]);
     _posMarker.setIcon(ico);
@@ -711,35 +752,38 @@ function _stopTracking() {
 
 function _onTrack(pos) {
   if (!_navActive) return;
-  const lat  = pos.coords.latitude;
-  const lng  = pos.coords.longitude;
+  const lat = pos.coords.latitude;
+  const lng = pos.coords.longitude;
 
-  // Heading: GPS preferujeme, fallback z trasy
+  // Heading: GPS pokud k dispozici a pohybujeme se, jinak z trasy
   let heading = pos.coords.heading;
-  if (heading === null || heading === undefined || isNaN(heading) || pos.coords.speed < 0.5) {
-    // Stojíme nebo GPS heading nedostupný → bearing z trasy
+  if (!heading || isNaN(heading) || (pos.coords.speed !== null && pos.coords.speed < 0.5)) {
     heading = _routeBearing(lat, lng);
   }
-  // Plynulé vyhlazení headingu (nechceme trhané otočení)
+  // Plynulé vyhlazení (potlačí GPS šum)
   heading = _smoothHeading(_lastValidHdg, heading);
   _lastValidHdg = heading;
   _lastHeading  = heading;
 
-  // Aktualizuj marker polohy
+  // Vždy aktualizuj marker + kompas ikonu
   _updatePosMarker(lat, lng, heading);
-
-  // Aktualizuj kompas ikonu (rotuje vždy — i bez follow)
   _updateCompassIcon(heading);
 
-  // Follow: centruj mapu (+ perspektiva)
+  // Follow mode
   if (_followMode) {
     if (_perspMode) {
-      // Tilt pohled: aplikuj rotaci + posuň centrum dopředu
-      _applyMapTransform(heading);
-      const ctr = _forwardCenter(lat, lng, heading, _FWD_OFFSET);
-      map.setView(ctr, _ZOOM_TILT, { animate: false });
+      // Throttle: jen pokud se heading nebo pozice změnily dost
+      if (_tiltNeedsUpdate(lat, lng, heading)) {
+        _applyMapTransform(heading);  // okamžité (bez transition)
+        const ctr = _forwardCenter(lat, lng, heading, _FWD_OFFSET);
+        // Animate: plynulé sledování, krátká duration (nečekáme na další GPS fix)
+        map.setView(ctr, _ZOOM_TILT, { animate: true, duration: 0.5 });
+        _lastTiltLat = lat;
+        _lastTiltLng = lng;
+        _lastTiltHdg = heading;
+      }
     } else {
-      map.setView([lat, lng], Math.max(map.getZoom(), _ZOOM_TOP), { animate: true, duration: 0.3 });
+      map.setView([lat, lng], Math.max(map.getZoom(), _ZOOM_TOP), { animate: true, duration: 0.4 });
     }
   }
 
@@ -753,12 +797,11 @@ function _onTrack(pos) {
     }
   }
 
-  // Trim trasy a překresli progress
+  // Trim + progress
   if (_activeFullCoords.length > 1) {
     const { idx, trimmed } = _trimRoute(_activeFullCoords, lat, lng);
     const done = _activeFullCoords.slice(0, idx + 1);
     _redrawProgress(done, trimmed);
-
     const remDist = _polyLen(trimmed);
     const remSec  = _navMode === 'driving'
       ? Math.round(remDist / (_avgSpeedMS || 13.9))
@@ -768,17 +811,13 @@ function _onTrack(pos) {
   }
 }
 
-// ── Vyhlazení headingu — zabrání trhavým otočením ───────────────
-// Exponenciální klouzavý průměr s korekcí překmitu přes 0°/360°
+// ── Exponenciální vyhlazení headingu (α=0.25) ───────────────────
 function _smoothHeading(prev, next) {
   if (prev === null || prev === undefined) return next;
   let diff = next - prev;
-  // Korektní přechod přes 0°/360°
-  if (diff > 180)  diff -= 360;
+  if (diff >  180) diff -= 360;
   if (diff < -180) diff += 360;
-  // α = 0.25 → pomalé vyhlazení (vhodné pro auto); 0.4 = rychlejší
-  const alpha = 0.3;
-  return (prev + alpha * diff + 360) % 360;
+  return (prev + 0.25 * diff + 360) % 360;
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -794,10 +833,12 @@ function clearNav() {
   // Reset perspektivního pohledu
   if (_perspMode) {
     _perspMode = false;
-    _resetMapTransform();
+    _exitTiltMode();
   }
   _lastValidHdg = 0;
   _lastHeading  = null;
+  _lastTiltLat = _lastTiltLng = _lastTiltHdg = null;
+  _updateCompassIcon(0);
 
   [_layerShadow, _layerDone, _layerTodo, _destMarker, _posMarker].forEach(l => {
     if (l) { try { map.removeLayer(l); } catch(e){} }
@@ -823,7 +864,6 @@ function clearNav() {
   document.getElementById('nav-pick-btn')?.classList.remove('pick-active');
   document.getElementById('nav-follow-btn')?.classList.remove('follow-on');
   document.getElementById('nav-persp-btn')?.classList.remove('persp-on');
-  document.getElementById('nav-compass-svg') && (_updateCompassIcon(0));
   document.body.classList.remove('nav-on');
 
   const lbl = document.getElementById('nav-pick-lbl');
