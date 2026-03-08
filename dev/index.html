@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Interaktivní mapa obce Bolatice</title>
+
+  <link rel="stylesheet" href="css/leaflet.css"
+        onerror="this.onerror=null;this.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<!-- ══ LOADING ══════════════════════════════════════════════════ -->
+<div id="loading">
+  <div class="ld-ring"></div>
+  <div class="ld-txt">Bolatice</div>
+  <div class="ld-sub" id="ld-sub">Inicializace…</div>
+</div>
+
+<!-- ══ LIGHTBOX ═════════════════════════════════════════════════ -->
+<div id="lightbox" onclick="closeLB()">
+  <span id="lb-close">✕</span>
+  <img id="lb-img" src="" alt="">
+</div>
+
+<!-- ══ NAVIGAČNÍ WIDGET ═════════════════════════════════════════ -->
+<div id="nav-widget">
+  <div class="nav-head">
+    <div class="nav-icon">🧭</div>
+    <div class="nav-dest-name" id="nav-dest-name">Navigace</div>
+    <button class="nav-close" onclick="clearNav()">✕</button>
+  </div>
+  <div class="nav-times">
+    <div class="nav-time">
+      <span class="nav-time-ico">🚗</span>
+      <div>
+        <div class="nav-time-val" id="nav-drive-time">–</div>
+        <div class="nav-time-lbl">autem</div>
+      </div>
+    </div>
+    <div class="nav-sep"></div>
+    <div class="nav-time">
+      <span class="nav-time-ico">🚶</span>
+      <div>
+        <div class="nav-time-val" id="nav-walk-time">–</div>
+        <div class="nav-time-lbl">pěšky</div>
+      </div>
+    </div>
+  </div>
+  <div class="nav-dist" id="nav-dist"></div>
+</div>
+
+<!-- ══ APLIKACE ═════════════════════════════════════════════════ -->
+<div id="app">
+  <header>
+    <button class="hbtn mob-only" id="mob-srch-btn" onclick="openMobSearch()">🔍</button>
+    <div class="logo">
+      <div class="logo-dot"></div>
+      Bolatice
+      <span class="logo-sub">/ IS DMVS</span>
+    </div>
+    <div id="tile-sw">
+      <button class="tbtn on"  id="tbtn-mapa" onclick="setTile('mapa')">🗺 Mapa</button>
+      <button class="tbtn off" id="tbtn-orto" onclick="setTile('orto')">🛰 Ortofoto</button>
+    </div>
+    <button class="hbtn desk-only" id="sb-hbtn" onclick="toggleSB()">☰</button>
+  </header>
+
+  <!-- Mobilní hledání (pod headerem, skryté) -->
+  <div id="mob-search" class="mob-only">
+    <div id="mob-search-bar">
+      <span class="mob-si">🔍</span>
+      <input type="text" id="mob-search-inp"
+             placeholder="Hledat místo, název…"
+             oninput="doSearch(this.value);renderMobResults()">
+      <button class="mob-sx" onclick="closeMobSearch()">✕</button>
+    </div>
+    <div id="mob-results"></div>
+  </div>
+
+  <div id="map"></div>
+</div>
+
+<!-- ══ SIDEBAR / BOTTOM SHEET ════════════════════════════════════
+     Desktop: levý panel
+     Mobil:   swipe panel odspodu
+════════════════════════════════════════════════════════════════ -->
+<div id="sidebar">
+
+  <!-- MOBILE: drag handle + kategorie jako ikony v peek pruhu -->
+  <div id="mob-bs-top">
+    <div id="mob-bs-pill" onclick="toggleBS()"></div>
+    <div id="mob-cat-icons"><!-- JS: renderMobCatIcons() --></div>
+  </div>
+
+  <!-- DESKTOP: search bar -->
+  <div class="sb-head desk-only">
+    <div class="sb-lbl">Hledat v mapě</div>
+    <div class="sb-search">
+      <span class="sb-si">🔍</span>
+      <input type="text" id="search-inp"
+             placeholder="Název, adresa, typ…"
+             oninput="doSearch(this.value)">
+    </div>
+  </div>
+
+  <div id="sb-scroll">
+
+    <!-- IS DMVS vrstvy — pokročilý režim -->
+    <div id="qgis-sec">
+      <div class="qgis-hdr">
+        <div class="qgis-hdr-lbl"><span>⬡</span> IS DMVS vrstvy</div>
+        <span class="qgis-hdr-cnt" id="qgis-cnt">–</span>
+      </div>
+      <div id="qgis-list"></div>
+    </div>
+
+    <!-- KATEGORIE POI -->
+    <div class="sb-sec" id="poi-cats-sec">
+      <div class="sb-sec-l">📍 Kategorie</div>
+      <div class="cat-chip active" id="chip-gastro" style="color:var(--gastro)" onclick="toggleCat('gastro')">
+        <div class="cat-dot"></div><span class="cat-chip-lbl">Gastronomie</span><span class="cat-cnt" id="cnt-gastro">0</span>
+      </div>
+      <div class="cat-chip active" id="chip-zdravi" style="color:var(--zdravi)" onclick="toggleCat('zdravi')">
+        <div class="cat-dot"></div><span class="cat-chip-lbl">Zdravotnictví</span><span class="cat-cnt" id="cnt-zdravi">0</span>
+      </div>
+      <div class="cat-chip active" id="chip-sport" style="color:var(--sport)" onclick="toggleCat('sport')">
+        <div class="cat-dot"></div><span class="cat-chip-lbl">Sport & volný čas</span><span class="cat-cnt" id="cnt-sport">0</span>
+      </div>
+      <div class="cat-chip active" id="chip-urad" style="color:var(--urad)" onclick="toggleCat('urad')">
+        <div class="cat-dot"></div><span class="cat-chip-lbl">Úřady & instituce</span><span class="cat-cnt" id="cnt-urad">0</span>
+      </div>
+      <div class="cat-chip active" id="chip-obchod" style="color:var(--obchod)" onclick="toggleCat('obchod')">
+        <div class="cat-dot"></div><span class="cat-chip-lbl">Obchody</span><span class="cat-cnt" id="cnt-obchod">0</span>
+      </div>
+      <div class="cat-chip active" id="chip-sluzby" style="color:var(--sluzby)" onclick="toggleCat('sluzby')">
+        <div class="cat-dot"></div><span class="cat-chip-lbl">Služby</span><span class="cat-cnt" id="cnt-sluzby">0</span>
+        <span class="cat-arr" onclick="event.stopPropagation();toggleSubList()"
+              style="padding:2px 4px;color:var(--sluzby)">▶</span>
+      </div>
+      <div class="sub-wrap" id="sub-sluzby"></div>
+    </div>
+
+    <!-- VÝSLEDKY -->
+    <div id="poi-res-sec">
+      <div class="res-hdr">Výsledky — <span id="res-cnt">0</span></div>
+      <div id="res-list"></div>
+    </div>
+
+  </div><!-- /sb-scroll -->
+
+  <div id="sb-adv-wrap">
+    <button id="adv-btn" onclick="toggleAdvanced()">
+      ⚙️ Pokročilý režim
+      <span id="adv-pill">VYPNUTO</span>
+    </button>
+  </div>
+
+</div><!-- /sidebar -->
+
+<div id="sb-handle" class="desk-only" onclick="toggleSB()">◀</div>
+<div id="dbadge">⏳ Načítám…</div>
+
+<!-- ══ FAB SLOUPEC ═══════════════════════════════════════════════
+     Desktop: nad zoom kontrolou (bottom-right)
+     Mobil:   nad peek pruhem bottom sheetu
+════════════════════════════════════════════════════════════════ -->
+<div id="fab-col">
+  <button class="fab" id="fab-msr" title="Měření"       onclick="toggleMsr()">📏</button>
+  <button class="fab" id="fab-geo" title="Moje poloha"  onclick="geolocate()">📍</button>
+  <button class="fab" id="fab-nav" title="Zrušit trasu" onclick="clearNav()">🧭</button>
+</div>
+
+<!-- ══ MĚŘICÍ PANEL ══════════════════════════════════════════════ -->
+<div id="msr-panel">
+  <div class="msr-cols">
+    <div class="msr-col">
+      <div class="msr-col-lbl">Délka</div>
+      <div id="msr-val" class="msr-num">0 m</div>
+    </div>
+    <div class="msr-col">
+      <div class="msr-col-lbl">Výměra</div>
+      <div id="msr-area" class="msr-num msr-area-num">—</div>
+    </div>
+  </div>
+  <div class="msr-hint" id="msr-hint">klikej body · Enter nebo ⬡ → uzavřít</div>
+  <div class="msr-actions">
+    <button onclick="closeMsrPolygon()">⬡ Uzavřít plochu</button>
+    <button onclick="clearMsr()">✕ Vymazat</button>
+  </div>
+</div>
+
+<!-- ══ STATS PANEL — jen pokročilý režim ════════════════════════ -->
+<div id="stats-panel">
+  <div class="stat"><div class="stat-dot" style="background:#a78bfa"></div>Budovy: <strong id="st-budovy">–</strong></div>
+  <div class="stat"><div class="stat-dot" style="background:var(--orange)"></div>Doprava: <strong id="st-doprava">–</strong></div>
+  <div class="stat"><div class="stat-dot" style="background:var(--green)"></div>POI: <strong id="st-poi">–</strong></div>
+</div>
+
+<!-- ══ POI PŘEHLED — základní režim ═════════════════════════════ -->
+<div id="poi-overview"><!-- JS: renderPOIOverview() --></div>
+
+<!-- ══ JS ZÁVISLOSTI ════════════════════════════════════════════ -->
+<script src="js/leaflet.js" onerror="console.warn('lokální leaflet chybí')"></script>
+<script>if(typeof L==='undefined'){document.write('<scr'+'ipt src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/scr'+'ipt>');}</script>
+<script src="js/proj4.js"        onerror="console.warn('proj4 chybí')"></script>
+<script src="js/proj4leaflet.js" onerror="console.warn('proj4leaflet chybí')"></script>
+
+<!-- ══ IS DMVS DATA ══════════════════════════════════════════════
+     Přidej/odeber dle aktuálního exportu z QGIS + config.js
+════════════════════════════════════════════════════════════════ -->
+<script src="data/Parkoviste_plocha_5.js"  onerror="console.warn('chybí Parkoviste_plocha_5')"></script>
+<script src="data/Budovy_2.js"             onerror="console.warn('chybí Budovy_2')"></script>
+<script src="data/Cyklostezka_1.js"        onerror="console.warn('chybí Cyklostezka_1')"></script>
+<script src="data/Hriste_0.js"             onerror="console.warn('chybí Hriste_0')"></script>
+<script src="data/Chodniky_4.js"           onerror="console.warn('chybí Chodniky_4')"></script>
+<script src="data/Komunikace_3.js"         onerror="console.warn('chybí Komunikace_3')"></script>
+<script src="data/Parkoviste_linie_6.js"   onerror="console.warn('chybí Parkoviste_linie_6')"></script>
+
+<!-- ══ APLIKAČNÍ JS ═════════════════════════════════════════════ -->
+<script src="js/config.js"></script>
+<script src="js/map.js"></script>
+<script src="js/layers.js"></script>
+<script src="js/poi.js"></script>
+<script src="js/measure.js"></script>
+<script src="js/nav.js"></script>
+<script src="js/ui.js"></script>
+
+</body>
+</html>
