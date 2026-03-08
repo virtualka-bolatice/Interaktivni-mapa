@@ -45,16 +45,15 @@ html, body {
 
 /* tilt-wrap: obal mapy — flex:1 na desktopu, overflow:hidden klipuje černé rohy při tiltu */
 #tilt-wrap {
-  position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  perspective: 1000px;
-  overflow: hidden; /* Důležité: ořízne přesahy */
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  z-index: 1;
 }
 /* #map uvnitř tilt-wrap — vždy vyplní celý tilt-wrap */
 #map {
-  width: 100%;
-  height: 100%;
-  transition: transform 0.8s ease-out, height 0.5s, top 0.5s;
+  position: absolute;
+  inset: 0;
 }
 
 /* ════════════════════════════════════════════════════════════════
@@ -474,10 +473,7 @@ body.nav-on #dbadge { display: none !important; }
 
 /* Nav-tilt: statický stav — BEZ transition (nechceme jitter každý GPS update) */
 #map.nav-tilt {
-  height: 250% !important; /* Extrémní zvětšení na výšku */
-  top: -75%; /* Posunutí nahoru, aby střed zůstal dole */
-  transform-origin: 50% 75%; /* Bod rotace posunutý dolů k uživateli */
-}
+  will-change: transform;
   /* transform a transform-origin nastaveny JS inline */
 }
 
