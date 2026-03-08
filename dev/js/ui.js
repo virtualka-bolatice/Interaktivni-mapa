@@ -1,25 +1,22 @@
 'use strict';
 
 // ════════════════════════════════════════════════════════════════
-//  ui.js — Sidebar/BottomSheet, mobilní search, geolokace, init
+//  ui.js — Sidebar/BS, mobile search, geolokace live, init
 // ════════════════════════════════════════════════════════════════
 
 function isMobile() { return window.innerWidth <= 768; }
 
 // ════════════════════════════════════════════════════════════════
-//  BOTTOM SHEET — plynulý drag (JS-řízený transform)
+//  BOTTOM SHEET — plynulý JS drag
 // ════════════════════════════════════════════════════════════════
-
-const BS_PEEK = 105;       // px viditelné v peek stavu
-let bsCurrentY  = 0;       // aktuální translateY (px)
+const BS_PEEK = 105;
+let bsCurrentY  = 0;
 let bsExpanded  = false;
 let sbOpen      = true;
 
-// ── Výpočet Y pozic ─────────────────────────────────────────────
 function _bsFullH()  { return document.getElementById('sidebar')?.offsetHeight || 400; }
 function _bsPeekY()  { return Math.max(0, _bsFullH() - BS_PEEK); }
 
-// ── Nastavení transformu ─────────────────────────────────────────
 function _bsSetY(y, animate = false) {
   const bs = document.getElementById('sidebar');
   if (!bs) return;
@@ -28,107 +25,113 @@ function _bsSetY(y, animate = false) {
   bsCurrentY = y;
 }
 
-// ── Snap: peek nebo expanded ─────────────────────────────────────
 function _bsSnapTo(expanded, animate = true) {
   bsExpanded = expanded;
   _bsSetY(expanded ? 0 : _bsPeekY(), animate);
 }
 
-// ── Veřejné toggle funkce ────────────────────────────────────────
 function toggleBS()  { if (isMobile()) _bsSnapTo(!bsExpanded); }
 function expandBS()  { if (isMobile()) _bsSnapTo(true);  }
 function collapseBS(){ if (isMobile()) _bsSnapTo(false); }
 
-// ── Inicializace BS na start ─────────────────────────────────────
 function _bsInit() {
   if (!isMobile()) return;
-  // Počkej jeden frame, aby se sidebar renderoval a měl výšku
-  requestAnimationFrame(() => {
-    _bsSetY(_bsPeekY(), false);
-  });
+  requestAnimationFrame(() => { _bsSetY(_bsPeekY(), false); });
 }
 
 // ════════════════════════════════════════════════════════════════
-//  SWIPE GESTA — plynulý drag kdekoliv na BS, zastav prstem
+//  SWIPE GESTA — drag na handle, scroll na sb-scroll nezasahuj
 // ════════════════════════════════════════════════════════════════
 function _initBSSwipe() {
-  const bs = document.getElementById('sidebar');
+  const handle   = document.getElementById('mob-bs-top');
+  const scrollEl = document.getElementById('sb-scroll');
+  const bs       = document.getElementById('sidebar');
   if (!bs) return;
 
-  let touchStartY   = 0;
-  let touchStartBsY = 0;   // bsCurrentY na začátku dotyku
-  let lastTouchY    = 0;
-  let lastTouchTime = 0;
-  let velY          = 0;   // rychlost px/ms
-  let dragging      = false;
+  let touchStartY    = 0;
+  let touchStartBsY  = 0;
+  let lastTouchY     = 0;
+  let lastTouchTime  = 0;
+  let velY           = 0;
+  let dragging       = false;
+  let dragSource     = null; // 'handle' | 'scroll'
 
-  // Drag funguje na celém BS — ale scroll oblasti nechceme zachytit
-  // Proto posloucháme na mob-bs-top (handle) bez omezení,
-  // a na sb-scroll jen pokud je na vrchu (scrollTop === 0 a swipe dolů)
-  const handle  = document.getElementById('mob-bs-top');
-  const scrollEl = document.getElementById('sb-scroll');
-
-  function onTouchStart(e) {
+  function onTouchStart(src, e) {
     if (!isMobile()) return;
-    // Na sb-scroll zachyť drag jen pokud je scrollTop == 0 a táhneme dolů
-    if (e.currentTarget === scrollEl) {
-      if (scrollEl.scrollTop > 2) return; // nechej scroll fungovat normálně
+
+    // Na scroll oblasti: zachyť drag jen pokud jsme na vrchu a swipe dolů
+    if (src === 'scroll') {
+      // Necháme rozhodnout až v touchmove
     }
-    touchStartY   = e.touches[0].clientY;
-    touchStartBsY = bsCurrentY;
-    lastTouchY    = touchStartY;
-    lastTouchTime = Date.now();
-    velY          = 0;
-    dragging      = true;
-    // Zastav animaci — prstem plně ovládáme
+
+    touchStartY    = e.touches[0].clientY;
+    touchStartBsY  = bsCurrentY;
+    lastTouchY     = touchStartY;
+    lastTouchTime  = Date.now();
+    velY           = 0;
+    dragging       = false;  // rozhodne se v touchmove
+    dragSource     = src;
     if (bs.style.transition) bs.style.transition = 'none';
   }
 
-  function onTouchMove(e) {
-    if (!dragging || !isMobile()) return;
-    const y   = e.touches[0].clientY;
-    const dt  = Date.now() - lastTouchTime;
-    if (dt > 0) velY = (y - lastTouchY) / dt;  // px/ms
+  function onTouchMove(src, e) {
+    if (!isMobile()) return;
+
+    const y     = e.touches[0].clientY;
+    const delta = y - touchStartY;
+    const dt    = Date.now() - lastTouchTime;
+    if (dt > 0) velY = (y - lastTouchY) / dt;
     lastTouchY    = y;
     lastTouchTime = Date.now();
 
-    const delta  = y - touchStartY;
-    const newY   = Math.max(0, Math.min(_bsPeekY(), touchStartBsY + delta));
-    // Real-time pohyb — žádná animace
+    // Na scroll oblasti — drag jen pokud:
+    //   a) táhneme dolů (delta > 0) A scrollEl je na vrchu
+    //   b) BS je expandovaný a táhneme dolů
+    if (src === 'scroll') {
+      const atTop = (scrollEl?.scrollTop ?? 0) <= 0;
+      if (!atTop) return;          // scrollEl má obsah nahoře — nechej scroll
+      if (delta < 0) return;       // swipe nahoru → nechej scroll
+    }
+
+    dragging = true;
+    const newY = Math.max(0, Math.min(_bsPeekY(), touchStartBsY + delta));
     bs.style.transform = `translateY(${newY}px)`;
     bsCurrentY = newY;
 
-    // Zabraň scrollu stránky při dragování BS
-    if (Math.abs(delta) > 8) e.preventDefault();
+    // Zastav browser scroll/overscroll jen pokud opravdu dragujeme BS
+    if (Math.abs(delta) > 6) e.preventDefault();
   }
 
   function onTouchEnd() {
-    if (!dragging || !isMobile()) return;
-    dragging = false;
+    if (!isMobile()) return;
+    if (!dragging) return;
+    dragging   = false;
+    dragSource = null;
+
     const peekY = _bsPeekY();
-    // Rozhodnutí podle pozice + rychlosti
-    // velY > 0 = táhne dolů (kolaps), velY < 0 = táhne nahoru (expand)
-    const midY = peekY / 2;
+    const midY  = peekY / 2;
     let snapExpanded;
-    if (Math.abs(velY) > 0.4) {
-      // Rychlý swipe → rozhoduje směr
-      snapExpanded = velY < 0;
+    if (Math.abs(velY) > 0.35) {
+      snapExpanded = velY < 0;   // rychlý swipe → směr
     } else {
-      // Pomalý pohyb → rozhoduje pozice
-      snapExpanded = bsCurrentY < midY;
+      snapExpanded = bsCurrentY < midY;  // pomalý → pozice
     }
     _bsSnapTo(snapExpanded, true);
   }
 
-  // Attach na handle (vždy zachycuje drag)
-  handle?.addEventListener('touchstart', onTouchStart, { passive: true });
-  handle?.addEventListener('touchmove',  onTouchMove,  { passive: false });
-  handle?.addEventListener('touchend',   onTouchEnd,   { passive: true });
+  // Handle — vždy zachycuje drag
+  if (handle) {
+    handle.addEventListener('touchstart', e => onTouchStart('handle', e), { passive: true });
+    handle.addEventListener('touchmove',  e => onTouchMove('handle', e),  { passive: false });
+    handle.addEventListener('touchend',   () => onTouchEnd(),              { passive: true });
+  }
 
-  // Attach na scroll oblast (jen pokud scrollTop == 0)
-  scrollEl?.addEventListener('touchstart', onTouchStart, { passive: true });
-  scrollEl?.addEventListener('touchmove',  onTouchMove,  { passive: false });
-  scrollEl?.addEventListener('touchend',   onTouchEnd,   { passive: true });
+  // Scroll oblast — conditionally zachycuje drag (jen při swipe dolů z vrchu)
+  if (scrollEl) {
+    scrollEl.addEventListener('touchstart', e => onTouchStart('scroll', e), { passive: true });
+    scrollEl.addEventListener('touchmove',  e => onTouchMove('scroll', e),  { passive: false });
+    scrollEl.addEventListener('touchend',   () => onTouchEnd(),              { passive: true });
+  }
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -136,15 +139,12 @@ function _initBSSwipe() {
 // ════════════════════════════════════════════════════════════════
 function toggleSB() {
   if (isMobile()) { toggleBS(); return; }
-
   sbOpen = !sbOpen;
   const sb = document.getElementById('sidebar');
   sb?.classList.toggle('closed', !sbOpen);
-
   const h = document.getElementById('sb-handle');
   if (h) { h.classList.toggle('closed', !sbOpen); h.textContent = sbOpen ? '◀' : '▶'; }
   document.getElementById('sb-hbtn')?.classList.toggle('on', sbOpen);
-
   updateLayoutPositions();
 }
 
@@ -170,87 +170,142 @@ function closeMobSearch() {
 function updateLayoutPositions() {
   if (isMobile()) return;
   const offset = sbOpen ? 285 : 0;
-
-  const scale = document.querySelector('.leaflet-bottom.leaflet-left');
+  const scale  = document.querySelector('.leaflet-bottom.leaflet-left');
   if (scale) scale.style.marginLeft = offset + 'px';
-
-  const centerLeft = sbOpen ? `calc(50% + ${offset / 2}px)` : '50%';
+  const cx = sbOpen ? `calc(50% + ${offset / 2}px)` : '50%';
   ['stats-panel', 'poi-overview', 'msr-panel'].forEach(id => {
     const el = document.getElementById(id);
-    if (el) { el.style.left = centerLeft; el.style.transform = 'translateX(-50%)'; }
+    if (el) { el.style.left = cx; el.style.transform = 'translateX(-50%)'; }
   });
 }
 
 // ════════════════════════════════════════════════════════════════
-//  GEOLOKACE — bez spamu kruhů
+//  GEOLOKACE — live watchPosition s filtrem přesnosti ≤ 10 m
 // ════════════════════════════════════════════════════════════════
-let _geoMarker  = null;
-let _geoCircle  = null;   // pouze JEDEN kruh najednou
-let _geoActive  = false;
+const GEO_MAX_ACCURACY = 10;   // m — cílová přesnost
+const GEO_TIMEOUT_BEST = 12000; // ms — jak dlouho čekat na lepší fix
+
+let _geoWatchId   = null;   // watchPosition ID pro live update
+let _geoMarker    = null;   // modrý tečkový marker
+let _geoCircle    = null;   // přesnostní kruh
+let _geoActive    = false;
+let _geoLatLng    = null;   // { lat, lng } — poslední poloha
+let _bestAccuracy = Infinity;
+let _geoSettleTimer = null;
 
 function geolocate() {
   const btn = document.getElementById('fab-geo');
   if (!navigator.geolocation) { alert('Geolokace není dostupná.'); return; }
 
-  // Pokud je geolokace aktivní — toggle: vypni
+  // Toggle: klik znovu = vypni
   if (_geoActive) {
-    _clearGeo();
+    _stopGeo();
     btn?.classList.remove('on');
-    // Schovej nav-pick-btn
     document.getElementById('nav-pick-btn')?.classList.remove('on');
-    cancelNavPick?.();
+    if (typeof cancelNavPick === 'function') cancelNavPick();
     return;
   }
 
   btn?.classList.add('on');
+  badge('📍 Hledám přesnou polohu…');
 
-  navigator.geolocation.getCurrentPosition(
-    pos => {
-      const { latitude: lat, longitude: lng, accuracy: acc } = pos.coords;
-
-      // Smaž předchozí kruh + marker (anti-spam)
-      _clearGeo();
-
-      const ico = L.divIcon({
-        html: `<div style="width:13px;height:13px;background:#3b82f6;border:3px solid #fff;border-radius:50%;box-shadow:0 0 10px #3b82f6aa"></div>`,
-        className: '', iconSize: [13,13], iconAnchor: [6.5,6.5],
-      });
-
-      _geoMarker = L.marker([lat, lng], { icon: ico })
-        .addTo(map)
-        .bindPopup(`<div style="padding:8px 10px;font-size:.75rem">📍 Vaše poloha<br>
-          <span style="color:var(--muted);font-size:.68rem">±${Math.round(acc)} m</span></div>`);
-
-      _geoCircle = L.circle([lat, lng], {
-        radius: acc, color: '#3b82f6', fillColor: '#3b82f6',
-        fillOpacity: .07, weight: 1,
-      }).addTo(map);
-
-      _geoActive = true;
-      map.setView([lat, lng], 16);
-
-      // Zobraz tlačítko výběru cíle navigace
-      document.getElementById('nav-pick-btn')?.classList.add('on');
-      badge('📍 Poloha nalezena — klikni 🎯 pro navigaci');
-    },
+  // watchPosition — browser posílá aktualizace jak se poloha zpřesňuje
+  _geoWatchId = navigator.geolocation.watchPosition(
+    pos => _onGeoUpdate(pos),
     err => {
       btn?.classList.remove('on');
-      alert('Chyba geolokace: ' + err.message);
+      _geoActive = false;
+      badge('❌ Geolokace selhala: ' + err.message);
     },
-    { enableHighAccuracy: true, timeout: 10000 }
+    {
+      enableHighAccuracy: true,
+      maximumAge:         0,
+      timeout:            GEO_TIMEOUT_BEST,
+    }
   );
 }
 
-function _clearGeo() {
-  if (_geoMarker) { try { map.removeLayer(_geoMarker); } catch(e){} _geoMarker = null; }
-  if (_geoCircle) { try { map.removeLayer(_geoCircle); } catch(e){} _geoCircle = null; }
-  _geoActive = false;
+function _onGeoUpdate(pos) {
+  const { latitude: lat, longitude: lng, accuracy: acc } = pos.coords;
+
+  // Přijmeme každý fix (live update), ale badge informuje o přesnosti
+  _geoLatLng    = { lat, lng };
+  _geoActive    = true;
+  _bestAccuracy = Math.min(_bestAccuracy, acc);
+
+  // Aktualizuj / vytvoř marker
+  _updateGeoMarker(lat, lng, acc);
+
+  // Zobraz nav tlačítko při prvním fixu
+  document.getElementById('nav-pick-btn')?.classList.add('on');
+
+  if (acc <= GEO_MAX_ACCURACY) {
+    badge(`📍 Poloha: ±${Math.round(acc)} m`);
+    // Při dosažení cílové přesnosti zastaví automaticky
+    clearTimeout(_geoSettleTimer);
+    // Pokračuj watchovat pro realtime aktualizace (nevolej clearWatch)
+  } else if (!_geoActive || acc < _bestAccuracy * 1.5) {
+    badge(`📍 Zpřesňuji polohu… ±${Math.round(acc)} m`);
+  }
 }
 
-// Vrátí aktuální polohu (pokud je k dispozici)
+function _updateGeoMarker(lat, lng, acc) {
+  const accR = Math.min(acc, 200); // nezobrazuj obří kruhy
+
+  if (!_geoMarker) {
+    const ico = L.divIcon({
+      html: `<div style="width:14px;height:14px;background:#3b82f6;border:3px solid #fff;
+               border-radius:50%;box-shadow:0 0 10px #3b82f6aa"></div>`,
+      className: '', iconSize: [14,14], iconAnchor: [7,7],
+    });
+    _geoMarker = L.marker([lat, lng], { icon: ico, zIndexOffset: 700 })
+      .addTo(map)
+      .bindPopup(`<div style="padding:8px 10px;font-size:.75rem">
+        📍 Vaše poloha<br>
+        <span id="geo-acc-txt" style="color:var(--muted);font-size:.68rem">±${Math.round(acc)} m</span>
+      </div>`);
+
+    _geoCircle = L.circle([lat, lng], {
+      radius: accR, color: '#3b82f6', fillColor: '#3b82f6',
+      fillOpacity: .07, weight: 1, interactive: false,
+    }).addTo(map);
+
+    map.setView([lat, lng], 16);
+  } else {
+    _geoMarker.setLatLng([lat, lng]);
+    _geoCircle.setLatLng([lat, lng]);
+    _geoCircle.setRadius(accR);
+    // Aktualizuj text v popupu pokud je otevřený
+    const accEl = document.getElementById('geo-acc-txt');
+    if (accEl) accEl.textContent = `±${Math.round(acc)} m`;
+  }
+}
+
+// Skryj geo vizuály (marker + kruh) bez zastavení watche
+// Volá se při startu navigace — poloha dál existuje pro nav.js
+function hideGeoVisuals() {
+  if (_geoMarker) { try { map.removeLayer(_geoMarker); } catch(e){} _geoMarker = null; }
+  if (_geoCircle) { try { map.removeLayer(_geoCircle); } catch(e){} _geoCircle = null; }
+  // _geoActive zůstane true, watchPosition pokračuje
+}
+
+function _stopGeo() {
+  if (_geoWatchId !== null) {
+    navigator.geolocation.clearWatch(_geoWatchId);
+    _geoWatchId = null;
+  }
+  clearTimeout(_geoSettleTimer);
+  if (_geoMarker) { try { map.removeLayer(_geoMarker); } catch(e){} _geoMarker = null; }
+  if (_geoCircle) { try { map.removeLayer(_geoCircle); } catch(e){} _geoCircle = null; }
+  _geoActive    = false;
+  _geoLatLng    = null;
+  _bestAccuracy = Infinity;
+}
+
+// Vrátí aktuální LatLng pro nav.js
 function getGeoLatLng() {
-  if (!_geoMarker) return null;
-  return _geoMarker.getLatLng();
+  if (!_geoLatLng) return null;
+  return L.latLng(_geoLatLng.lat, _geoLatLng.lng);
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -265,7 +320,6 @@ function badge(msg) {
   clearTimeout(_badgeTimer);
   _badgeTimer = setTimeout(() => el.classList.add('fade'), 5000);
 }
-
 function ld(msg) {
   const el = document.getElementById('ld-sub');
   if (el) el.textContent = msg;
@@ -284,7 +338,6 @@ window.addEventListener('load', async () => {
   poiGroup.bringToFront();
   updateLayoutPositions();
 
-  // Bottom sheet init + swipe
   _bsInit();
   _initBSSwipe();
 
@@ -295,12 +348,10 @@ window.addEventListener('load', async () => {
 
 window.addEventListener('resize', () => {
   updateLayoutPositions();
-  if (!isMobile()) {
-    // Na desktopu resetuj BS stav
+  if (isMobile()) {
+    _bsSnapTo(bsExpanded, false);
+  } else {
     const bs = document.getElementById('sidebar');
     if (bs) { bs.style.transform = ''; bs.style.transition = ''; }
-  } else {
-    // Při otočení znovu spočítej peek pozici
-    _bsSnapTo(bsExpanded, false);
   }
 });

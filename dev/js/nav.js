@@ -187,6 +187,8 @@ async function navigateTo(targetLat, targetLng, targetName) {
   const oLat = geoPos.lat, oLng = geoPos.lng;
 
   clearNav();
+  // Skryj geo marker/kruh — poloha stále aktivní pro tracking
+  if (typeof hideGeoVisuals === 'function') hideGeoVisuals();
   badge('🧭 Načítám trasu…');
 
   try {

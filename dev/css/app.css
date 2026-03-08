@@ -174,8 +174,15 @@ header {
 #mob-bs-top { display: none; }
 
 /* Search bar */
-.sb-head { padding: 11px 13px 9px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-.sb-lbl  { font-size: .62rem; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 7px; text-align: center; }
+.sb-head {
+  padding: 11px 13px 9px;
+  border-bottom: 1px solid var(--border); flex-shrink: 0;
+  display: flex; flex-direction: column; gap: 0;
+}
+.sb-lbl  {
+  font-size: .6rem; letter-spacing: 1.5px; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 6px; text-align: center; display: block;
+}
 .sb-search { position: relative; }
 .sb-search input {
   width: 100%; padding: 7px 10px 7px 30px;
@@ -421,7 +428,7 @@ header {
    FAB TLAČÍTKA
    ════════════════════════════════════════════════════════════════ */
 #fab-col {
-  position: absolute; right: 12px; bottom: 100px;
+  position: absolute; right: 12px; bottom: 97px;
   z-index: 900; display: flex; flex-direction: column; gap: 6px; align-items: center;
 }
 .fab {
@@ -618,8 +625,8 @@ header {
   .mob-cat-lbl { font-size: .58rem; color: var(--muted); text-align: center; max-width: 46px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .mob-cat-cnt { font-size: .62rem; font-weight: 600; color: var(--cat-color, #3b82f6); }
 
-  /* Scroll obsah v BS */
-  #sb-scroll { overflow-y: auto; }
+  /* Scroll obsah v BS — touch-action: pan-y = nativní scroll funguje */
+  #sb-scroll { overflow-y: auto; touch-action: pan-y; overscroll-behavior: contain; }
 
   /* Sidebar handle — skryt na mobilu */
   #sb-handle { display: none !important; }
@@ -663,6 +670,26 @@ header {
 
   /* Badge — přes celou šířku, ne vlevo */
   #dbadge { font-size: .62rem; }
+
+  /* Kategorie chips — skryté v mobilním BS (filtry jsou v peek ikonách) */
+  #poi-cats-sec { display: none !important; }
+
+  /* Mobile subcat pills — viditelné nad výsledky */
+  #mob-subcat-wrap {
+    display: flex; flex-wrap: wrap; gap: 5px;
+    padding: 6px 12px 2px;
+    border-top: 1px solid var(--border);
+  }
+  #mob-subcat-wrap:empty { display: none; }
+  .mob-sub-pill {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 9px; border-radius: 20px;
+    font-size: .72rem; font-weight: 500; cursor: pointer;
+    border: 1.5px solid currentColor; transition: all .15s;
+    opacity: .5;
+  }
+  .mob-sub-pill.active { opacity: 1; background: rgba(0,0,0,.18); }
+  .mob-sub-pill-ico { font-size: .75rem; }
 }
 
 /* Desktop skryje mob-only prvky */

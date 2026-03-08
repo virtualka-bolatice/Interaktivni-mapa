@@ -76,6 +76,7 @@ async function loadPOI() {
   renderPOI();
   updateCounts();
   renderResults();
+  renderMobSubcats();
   document.getElementById('st-poi').textContent = ST.features.length;
 }
 
@@ -237,6 +238,30 @@ function renderMobCatIcons(counts) {
   }).join('');
 }
 
+
+// ── MOBILNÍ SUBKATEGORIE — pills nad výsledky ────────────────────
+// Zobrazí se jen pokud je aktivní solo-filtr kategorie se subkategoriemi
+function renderMobSubcats() {
+  const el = document.getElementById('mob-subcat-wrap');
+  if (!el) return;
+  el.innerHTML = '';
+
+  // Zobrazit jen pokud filtrujeme solo kategorii se subkategoriemi
+  if (!ST.filterMode || !ST.filterKey) return;
+  const cat = CAT_CFG[ST.filterKey];
+  if (!cat?.subs || Object.keys(cat.subs).length === 0) return;
+
+  for (const [k, sub] of Object.entries(cat.subs)) {
+    if (ST.subActive[k] === undefined) ST.subActive[k] = true;
+    const pill = document.createElement('span');
+    pill.className = 'mob-sub-pill' + (ST.subActive[k] ? ' active' : '');
+    pill.style.color = sub.color || cat.color;
+    pill.innerHTML = `<span class="mob-sub-pill-ico">${sub.icon}</span>${sub.label}`;
+    pill.onclick = () => toggleSub(k);
+    el.appendChild(pill);
+  }
+}
+
 // ── VÝSLEDKY ─────────────────────────────────────────────────────
 function renderResults() {
   _renderResultsInto('res-list', 'res-cnt');
@@ -320,12 +345,17 @@ function toggleCat(k) {
   }
   renderPOI();
   renderResults();
-  renderMobCatIcons(); // sync mobilní ikony
+  renderMobCatIcons();
+  renderMobSubcats();
 }
 
 function toggleSub(k) {
   ST.subActive[k] = !ST.subActive[k];
   document.getElementById('subchip-' + k)?.classList.toggle('active', ST.subActive[k]);
+  // Sync mobile pill
+  document.querySelectorAll('.mob-sub-pill').forEach(p => {
+    if (p.dataset.key === k) p.classList.toggle('active', ST.subActive[k]);
+  });
   renderPOI(); renderResults();
 }
 
