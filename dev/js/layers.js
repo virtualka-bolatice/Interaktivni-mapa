@@ -267,6 +267,9 @@ function setLayerOpacity(entry, opacity) {
 }
 
 // ── POKROČILÝ REŽIM ──────────────────────────────────────────────
+// Uloží stav viditelnosti POI skupin před vstupem do adv. režimu
+let _poiStateBeforeAdv = null;
+
 function toggleAdvanced() {
   advancedMode = !advancedMode;
 
@@ -281,15 +284,25 @@ function toggleAdvanced() {
   document.getElementById('poi-cats-sec')?.classList.toggle('sec-hidden', advancedMode);
   document.getElementById('poi-res-sec')?.classList.toggle('sec-hidden', advancedMode);
 
-  // Stats panel — jen pokročilý
+  // Stats panel — jen pokročilý (desktop + mobile)
   document.getElementById('stats-panel')?.classList.toggle('adv-show', advancedMode);
 
-  // POI přehled — jen základní
+  // POI přehled widget — jen základní
   document.getElementById('poi-overview')?.classList.toggle('adv-hide', advancedMode);
 
+  // POI markery na mapě — skryj v pokročilém, obnov po vypnutí
   if (advancedMode) {
+    // Ulož aktuální stav catActive a vymaž skupiny z mapy
+    _poiStateBeforeAdv = JSON.parse(JSON.stringify(typeof ST !== 'undefined' ? ST.catActive : {}));
+    if (typeof poiGroup !== 'undefined') poiGroup.clearLayers();
     document.getElementById('sb-scroll').scrollTop = 0;
   } else {
+    // Obnov POI markery — stav před vstupem do pokročilého
+    if (_poiStateBeforeAdv && typeof ST !== 'undefined') {
+      ST.catActive = { ..._poiStateBeforeAdv };
+    }
+    if (typeof renderPOI === 'function') renderPOI();
+
     // Vypni všechny DMVS vrstvy při opuštění pokročilého režimu
     qgisLayers.forEach(entry => {
       if (!entry.visible) return;

@@ -66,10 +66,10 @@ html, body {
    HEADER
    ════════════════════════════════════════════════════════════════ */
 header {
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; align-items: center;
   padding: 0 12px; height: var(--hdr); flex-shrink: 0;
   background: var(--surface); border-bottom: 1px solid var(--border);
-  z-index: 1100; gap: 8px;
+  z-index: 1100; gap: 8px; position: relative;
 }
 .logo {
   font-family: 'Syne', sans-serif; font-weight: 800; font-size: .98rem;
@@ -84,7 +84,15 @@ header {
 @keyframes blink { 0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.65)} }
 .logo-sub { font-weight: 400; color: var(--muted); font-size: .76rem; }
 
-#tile-sw { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; flex-shrink: 0; }
+#tile-sw {
+  display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; flex-shrink: 0;
+}
+/* Desktop: tile-sw absolutně na střed headeru */
+@media (min-width: 769px) {
+  #tile-sw {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  }
+}
 .tbtn {
   padding: 5px 10px; font-family: 'DM Sans', sans-serif; font-size: .72rem;
   font-weight: 500; cursor: pointer; border: none; transition: all .18s;
@@ -167,7 +175,7 @@ header {
 
 /* Search bar */
 .sb-head { padding: 11px 13px 9px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-.sb-lbl  { font-size: .62rem; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 7px; }
+.sb-lbl  { font-size: .62rem; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 7px; text-align: center; }
 .sb-search { position: relative; }
 .sb-search input {
   width: 100%; padding: 7px 10px 7px 30px;
@@ -413,7 +421,7 @@ header {
    FAB TLAČÍTKA
    ════════════════════════════════════════════════════════════════ */
 #fab-col {
-  position: absolute; right: 12px; bottom: 84px;
+  position: absolute; right: 12px; bottom: 94px;
   z-index: 900; display: flex; flex-direction: column; gap: 6px; align-items: center;
 }
 .fab {
@@ -648,8 +656,10 @@ header {
     backdrop-filter: blur(4px);
   }
 
-  /* POI overview — kompaktnější na mobilu */
-  #poi-overview { font-size: .62rem; padding: 4px 8px; gap: 5px; }
+  /* POI overview — na mobilu skryt (countery nejsou v default módu potřeba) */
+  #poi-overview { display: none !important; }
+  /* Stats panel v advanced módu na mobilu zobrazit */
+  #stats-panel.adv-show { display: flex !important; }
 
   /* Badge — přes celou šířku, ne vlevo */
   #dbadge { font-size: .62rem; }
