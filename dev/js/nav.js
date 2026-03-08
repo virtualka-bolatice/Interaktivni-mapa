@@ -609,6 +609,27 @@ function _exitTiltMode() {
   }, 500);
 }
 
+function _enterTiltMode(hdgDeg) {
+  const mc = map.getContainer();
+  mc.classList.add('nav-tilt');
+  
+  // Aplikace transformace
+  _accumulatedHdg = null;
+  mc.style.transform = `rotateX(${_TILT_DEG}deg) rotateZ(${-_updateAccumulatedHdg(hdgDeg)}deg)`;
+  
+  // DŮLEŽITÉ: Donutí Leaflet načíst dlaždice pro novou, 250% výšku
+  setTimeout(() => map.invalidateSize({ pan: false }), 100); 
+}
+
+function _exitTiltMode() {
+  const mc = map.getContainer();
+  mc.style.transform = '';
+  mc.classList.remove('nav-tilt');
+  
+  setTimeout(() => map.invalidateSize({ pan: false }), 500);
+}
+
+
 function _updateCompassIcon(hdgDeg) {
   const svg = document.getElementById('nav-compass-svg');
   if (svg) svg.style.transform = `rotate(${-hdgDeg}deg)`;
