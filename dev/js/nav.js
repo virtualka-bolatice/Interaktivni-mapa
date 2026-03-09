@@ -510,7 +510,7 @@ function _buildNavMarkerIcon(hdgDeg, mode) {
     // Chodec — pohled přímo shora: hlava (kolečko), ramena, trup, špičky bot
     return L.divIcon({
       html:`<div class="nav-pos-marker" style="transform:rotate(${rot}deg);transform-origin:50% 50%;width:28px;height:44px">
-<svg viewBox="0 0 28 44" width="28" height="44" xmlns="http://www.w3.org/2000/svg">
+<svg viewBox="0 0 28 28" width="28" height="28" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <filter id="ws"><feDropShadow dx="0" dy="1.5" stdDeviation="2" flood-color="#065f46" flood-opacity=".55"/></filter>
     <linearGradient id="wg" x1="0" y1="0" x2="0" y2="1">
@@ -518,29 +518,13 @@ function _buildNavMarkerIcon(hdgDeg, mode) {
       <stop offset="100%" stop-color="#059669"/>
     </linearGradient>
   </defs>
-  <!-- Stín pod figurou -->
-  <ellipse cx="14" cy="42.5" rx="9.5" ry="1.8" fill="rgba(0,0,0,.22)"/>
-  <!-- Levá špička boty -->
-  <ellipse cx="10" cy="37" rx="3.2" ry="4.2" fill="#1e293b" transform="rotate(-6,10,37)"/>
-  <!-- Pravá špička boty -->
-  <ellipse cx="18" cy="37" rx="3.2" ry="4.2" fill="#1e293b" transform="rotate(6,18,37)"/>
-  <!-- Levá noha -->
-  <ellipse cx="10" cy="28" rx="3" ry="5.5" fill="#059669"/>
-  <!-- Pravá noha -->
-  <ellipse cx="18" cy="28" rx="3" ry="5.5" fill="#059669"/>
-  <!-- Levá paže -->
-  <ellipse cx="4.5" cy="19.5" rx="2.4" ry="5.5" fill="#10b981" transform="rotate(-18,4.5,19.5)"/>
-  <!-- Pravá paže -->
-  <ellipse cx="23.5" cy="19.5" rx="2.4" ry="5.5" fill="#10b981" transform="rotate(18,23.5,19.5)"/>
-  <!-- Trup -->
-  <ellipse cx="14" cy="19" rx="7" ry="9" fill="url(#wg)" filter="url(#ws)"/>
   <!-- Hlava — kolečko (vrchol = směr jízdy) -->
-  <circle cx="14" cy="8" r="7.8" fill="url(#wg)" filter="url(#ws)"/>
-  <circle cx="14" cy="8" r="7.8" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="1.2"/>
-  <!-- Odlesk na hlavě -->
-  <ellipse cx="11" cy="5.5" rx="3.2" ry="2.6" fill="rgba(255,255,255,.28)"/>
+  <circle cx="14" cy="14" r="12" fill="url(#wg)" filter="url(#ws)"/>
+  <circle cx="14" cy="14" r="12" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="1.5"/>
+  <!-- Odlesk -->
+  <ellipse cx="10" cy="10" rx="4" ry="3.2" fill="rgba(255,255,255,.28)"/>
 </svg></div>`,
-      className: '', iconSize: [28,44], iconAnchor: [14,22],
+      className: '', iconSize: [28,28], iconAnchor: [14,14],
     });
   }
 }
