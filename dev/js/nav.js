@@ -9,10 +9,7 @@ const OSRM_BASE     = 'https://router.project-osrm.org/route/v1';
 const NOM_BASE      = 'https://nominatim.openstreetmap.org/reverse';
 const WALK_SPEED_MS = 1.25;
 const ARRIVE_M      = 25;
-const SNAP_DIST_M   = 30;       // m — snap polohy na trasu
-const _CONE_RADIUS_M   = 80;    // m — délka kužele (kratší = jako Google Maps)
-const _CONE_HALF_ANGLE = 30;    // ° na každou stranu (užší kužel)
-const _CONE_STEPS      = 24;    // hladkost oblouku
+const SNAP_DIST_M   = 30;
 
 // ── Stav ─────────────────────────────────────────────────────────
 let _navPickActive = false;
@@ -91,38 +88,54 @@ function _smoothHeading(prev, next) {
 }
 
 // ════════════════════════════════════════════════════════════════
-//  HEADING CONE — průsvitný kužel dopředu (Google Maps styl)
-//  Bez ohraničení, gradient fill od středu dozoru
+//  HEADING CONE — gradient DivIcon, pevná velikost ~38px (≈1 cm)
+//  Používá SVG radialGradient: středem intenzivní, kraji průhledné.
+//  Nepotřebuje geomatematiku — jde o vizuální element na markeru.
 // ════════════════════════════════════════════════════════════════
-function _buildConeLatLngs(lat, lng, hdgDeg, radiusM, halfAngle) {
-  const R=6371000, step=(halfAngle*2)/_CONE_STEPS;
-  const pts=[[lat,lng]];
-  for (let a=hdgDeg-halfAngle; a<=hdgDeg+halfAngle+step/2; a+=step) {
-    const bearRad=a*Math.PI/180, d=radiusM/R;
-    const φ1=lat*Math.PI/180, λ1=lng*Math.PI/180;
-    const φ2=Math.asin(Math.sin(φ1)*Math.cos(d)+Math.cos(φ1)*Math.sin(d)*Math.cos(bearRad));
-    const λ2=λ1+Math.atan2(Math.sin(bearRad)*Math.sin(d)*Math.cos(φ1), Math.cos(d)-Math.sin(φ1)*Math.sin(φ2));
-    pts.push([φ2*180/Math.PI, λ2*180/Math.PI]);
-  }
-  pts.push([lat,lng]);
-  return pts;
+const _CONE_PX = 52;   // výška kužele v pixelech
+const _CONE_W  = 72;   // šířka kužele v pixelech
+
+function _makeConeIcon(hdgDeg) {
+  // Unikátní ID gradienty (vícenásobné SVG na stránce)
+  const gid = 'cg' + Date.now();
+  return L.divIcon({
+    html: `<div class="hdg-cone-wrap" style="transform:rotate(${hdgDeg??0}deg);transform-origin:50% 100%;width:${_CONE_W}px;height:${_CONE_PX}px">
+<svg width="${_CONE_W}" height="${_CONE_PX}" viewBox="0 0 ${_CONE_W} ${_CONE_PX}" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="${gid}" cx="50%" cy="100%" r="95%" fx="50%" fy="100%">
+      <stop offset="0%"   stop-color="#60a5fa" stop-opacity="0.75"/>
+      <stop offset="35%"  stop-color="#3b82f6" stop-opacity="0.45"/>
+      <stop offset="70%"  stop-color="#1d4ed8" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#1e40af" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <path d="M${_CONE_W/2},${_CONE_PX} Q${_CONE_W*0.12},${_CONE_PX*0.35} 2,0 Q${_CONE_W/2},-6 ${_CONE_W-2},0 Q${_CONE_W*0.88},${_CONE_PX*0.35} ${_CONE_W/2},${_CONE_PX} Z"
+        fill="url(#${gid})"/>
+</svg></div>`,
+    className: '',
+    iconSize:   [_CONE_W, _CONE_PX],
+    iconAnchor: [_CONE_W/2, _CONE_PX],   // kotva = spodek středu = pozice uživatele
+  });
 }
 
 function _updateHeadingCone(lat, lng, hdgDeg) {
   if (!_coneVisible) return;
-  const pts = _buildConeLatLngs(lat, lng, hdgDeg, _CONE_RADIUS_M, _CONE_HALF_ANGLE);
   if (!_headingCone) {
-    _headingCone = L.polygon(pts, {
-      // Žádný stroke border — jen průhledná výplň, jako WiFi signál / Google Maps
-      color: 'transparent',
-      fillColor: '#3b82f6',
-      fillOpacity: 0.18,
-      weight: 0,
-      interactive: false,
-      className: 'heading-cone-layer',
+    _headingCone = L.marker([lat, lng], {
+      icon:           _makeConeIcon(hdgDeg),
+      zIndexOffset:   -200,
+      interactive:    false,
+      rotateWithView: false,
     }).addTo(map);
   } else {
-    _headingCone.setLatLngs(pts);
+    _headingCone.setLatLng([lat, lng]);
+    // Aktualizuj rotaci přímo v DOM — bez rebuild ikony
+    const el = _headingCone.getElement();
+    if (el) {
+      const wrap = el.querySelector('.hdg-cone-wrap');
+      if (wrap) wrap.style.transform = `rotate(${hdgDeg??0}deg)`;
+      else _headingCone.setIcon(_makeConeIcon(hdgDeg));
+    }
   }
 }
 
@@ -335,16 +348,18 @@ async function _startNav(tLat,tLng,tName,mode,driveRoute,walkRoute) {
   _showNavWidget(mode,tName,dur,dist);
   document.body.classList.add('nav-on');
   _navActive=true;
-  // Zapamatuj start čas a celkovou vzdálenost pro arrival stats
   _navStartTime = Date.now();
   _navTotalDist = dist;
+  // VŽDY skryj geo vizuály — marker + přesnostní kruh — navigace přebírá polohu
+  if (typeof hideGeoVisuals === 'function') hideGeoVisuals();
+  if (typeof navRemoveHeadingCone === 'function') navRemoveHeadingCone();
   try{map.fitBounds(L.latLngBounds(coords).pad(.12));}catch(e){}
   _setFollow(true);
   map.on('dragstart',_onMapDrag);
   _startTracking(tLat,tLng,tName);
   document.getElementById('fab-nav')?.classList.add('on');
   document.getElementById('nav-persp-btn')?.classList.add('persp-on');
-  // Deaktivuj geo FAB vizuálně (navigace přebírá tracking)
+  // Geo FAB zašedí — navigace přebírá tracking
   document.getElementById('fab-geo')?.classList.add('nav-taking-over');
 }
 
@@ -439,59 +454,94 @@ function _updateWidget(remSec,remDist) {
 }
 
 // ════════════════════════════════════════════════════════════════
-//  NAVIGAČNÍ MARKER — auto nebo chodec, směrový špendlík
-//  rot = absolutní heading v degrees (mapa NENÍ rotovaná)
+//  NAVIGAČNÍ MARKER — auto nebo chodec
+//  rotateWithView:false → leaflet-rotate ho neotáčí automaticky
+//  Rotaci headingu aplikujeme ručně přes style.transform
 // ════════════════════════════════════════════════════════════════
 function _buildNavMarkerIcon(hdgDeg, mode) {
-  const isDriving = (mode||_navMode) === 'driving';
+  const isDriving = (mode || _navMode) === 'driving';
   const rot = hdgDeg ?? 0;
 
   if (isDriving) {
-    // Auto — moderní zaoblený tvar, čelní světla, zadní světla, šipka nahoru
+    // Auto — pohled shora, výrazné barvy, světla, špička = přední část
     return L.divIcon({
-      html:`<div class="nav-pos-marker" style="width:40px;height:52px;transform:rotate(${rot}deg)">
-<svg viewBox="0 0 40 52" width="40" height="52" xmlns="http://www.w3.org/2000/svg">
+      html:`<div class="nav-pos-marker" style="transform:rotate(${rot}deg);transform-origin:50% 50%;width:36px;height:52px">
+<svg viewBox="0 0 36 52" width="36" height="52" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="cs"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#1d4ed8" flood-opacity=".55"/></filter>
+    <linearGradient id="cg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#60a5fa"/>
+      <stop offset="100%" stop-color="#1d4ed8"/>
+    </linearGradient>
+  </defs>
   <!-- stín -->
-  <ellipse cx="20" cy="49" rx="11" ry="3" fill="rgba(0,0,0,.22)"/>
-  <!-- karoserie -->
-  <path d="M7,16 Q7,8 15,6 L25,6 Q33,8 33,16 L33,41 Q33,47 25,47 L15,47 Q7,47 7,41 Z" fill="#1d4ed8"/>
-  <!-- střešní okno -->
-  <path d="M14,19 L15,13 Q15.5,11.5 18,11.5 L22,11.5 Q24.5,11.5 25,13 L26,19 Z" fill="rgba(147,210,255,.55)"/>
+  <ellipse cx="18" cy="49" rx="11" ry="2.8" fill="rgba(0,0,0,.30)"/>
+  <!-- karoserie základna -->
+  <path d="M5,14 Q5,6 13,5 L23,5 Q31,6 31,14 L31,40 Q31,46 23,46 L13,46 Q5,46 5,40 Z"
+        fill="url(#cg)" filter="url(#cs)"/>
+  <!-- přední sklo — výrazně modré -->
+  <path d="M12,16 L13,10 Q13.5,8.5 18,8.5 Q22.5,8.5 23,10 L24,16 Z"
+        fill="#bfdbfe" opacity=".85"/>
+  <!-- přední sklo střed přechod -->
+  <path d="M14,16 L14.5,10.5 Q18,9.5 21.5,10.5 L22,16 Z"
+        fill="rgba(255,255,255,.35)"/>
   <!-- zadní okno -->
-  <path d="M15,39 L25,39 L26,44 Q25.5,45.5 24,45.5 L16,45.5 Q14.5,45.5 14,44 Z" fill="rgba(147,210,255,.22)"/>
-  <!-- čelní světla -->
-  <rect x="9"  y="8.5" width="5" height="3" rx="1.5" fill="#fde68a" opacity=".92"/>
-  <rect x="26" y="8.5" width="5" height="3" rx="1.5" fill="#fde68a" opacity=".92"/>
-  <!-- zadní světla -->
-  <rect x="9"  y="42" width="4" height="2.5" rx="1.2" fill="#ef4444" opacity=".88"/>
-  <rect x="27" y="42" width="4" height="2.5" rx="1.2" fill="#ef4444" opacity=".88"/>
-  <!-- obrys gloss -->
-  <path d="M7,16 Q7,8 15,6 L25,6 Q33,8 33,16 L33,41 Q33,47 25,47 L15,47 Q7,47 7,41 Z" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="1.2"/>
-  <!-- šipka směru — bílá, nahoře -->
-  <polygon points="20,0 25,8 15,8" fill="white" opacity=".97"/>
+  <path d="M13,37 L23,37 L23.5,42 Q23,43.5 18,43.5 Q13,43.5 12.5,42 Z"
+        fill="#93c5fd" opacity=".5"/>
+  <!-- čelní světla — sytě žluté -->
+  <rect x="5"  y="7"  width="5.5" height="3.5" rx="1.8" fill="#fef08a"/>
+  <rect x="25.5" y="7" width="5.5" height="3.5" rx="1.8" fill="#fef08a"/>
+  <!-- čelní světla vnitřní záblesk -->
+  <rect x="6"  y="7.5" width="2" height="2" rx="1" fill="white" opacity=".7"/>
+  <rect x="27" y="7.5" width="2" height="2" rx="1" fill="white" opacity=".7"/>
+  <!-- zadní světla — sytě červené -->
+  <rect x="5"  y="40.5" width="5" height="3" rx="1.5" fill="#ef4444"/>
+  <rect x="26" y="40.5" width="5" height="3" rx="1.5" fill="#ef4444"/>
+  <!-- levé kolo -->
+  <rect x="2"  y="13" width="5" height="9" rx="2.5" fill="#1e293b"/>
+  <rect x="2"  y="31" width="5" height="9" rx="2.5" fill="#1e293b"/>
+  <!-- pravé kolo -->
+  <rect x="29" y="13" width="5" height="9" rx="2.5" fill="#1e293b"/>
+  <rect x="29" y="31" width="5" height="9" rx="2.5" fill="#1e293b"/>
+  <!-- obrys blysk -->
+  <path d="M5,14 Q5,6 13,5 L23,5 Q31,6 31,14 L31,40 Q31,46 23,46 L13,46 Q5,46 5,40 Z"
+        fill="none" stroke="rgba(255,255,255,.30)" stroke-width="1"/>
+  <!-- šipka směru — bílá nahoru -->
+  <polygon points="18,0 23,6.5 13,6.5" fill="white" opacity=".95"/>
 </svg></div>`,
-      className:'', iconSize:[40,52], iconAnchor:[20,26],
+      className: '', iconSize: [36,52], iconAnchor: [18,26],
     });
   } else {
-    // Chodec — moderní kulatý badge se šipkou
+    // Chodec — hlava + ramena, výrazná zelená
     return L.divIcon({
-      html:`<div class="nav-pos-marker" style="width:32px;height:42px;transform:rotate(${rot}deg)">
-<svg viewBox="0 0 32 42" width="32" height="42" xmlns="http://www.w3.org/2000/svg">
+      html:`<div class="nav-pos-marker" style="transform:rotate(${rot}deg);transform-origin:50% 50%;width:30px;height:44px">
+<svg viewBox="0 0 30 44" width="30" height="44" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="ws"><feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#065f46" flood-opacity=".55"/></filter>
+    <linearGradient id="wg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#34d399"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+  </defs>
   <!-- stín -->
-  <ellipse cx="16" cy="39.5" rx="9" ry="2.5" fill="rgba(0,0,0,.22)"/>
-  <!-- kruh tělo -->
-  <circle cx="16" cy="22" r="12" fill="#059669"/>
-  <!-- highlight -->
-  <ellipse cx="12" cy="17" rx="5" ry="4" fill="rgba(255,255,255,.14)"/>
-  <!-- postava (zjednodušená) -->
-  <circle cx="16" cy="16" r="3.5" fill="rgba(255,255,255,.88)"/>
-  <path d="M12.5,20 Q13,24 16,25 Q19,24 19.5,20" fill="rgba(255,255,255,.7)"/>
-  <!-- gloss obrys -->
-  <circle cx="16" cy="22" r="12" fill="none" stroke="rgba(255,255,255,.25)" stroke-width="1.2"/>
-  <!-- šipka směru nahoru -->
-  <polygon points="16,0 21,9 11,9" fill="white" opacity=".97"/>
+  <ellipse cx="15" cy="41.5" rx="9" ry="2.5" fill="rgba(0,0,0,.28)"/>
+  <!-- trup (ramena + hruď) -->
+  <path d="M4,26 Q4,19 15,18 Q26,19 26,26 L26,38 Q26,41 23,41 L7,41 Q4,41 4,38 Z"
+        fill="url(#wg)" filter="url(#ws)"/>
+  <!-- highlight na ramenou -->
+  <ellipse cx="15" cy="21" rx="9" ry="4.5" fill="rgba(255,255,255,.18)"/>
+  <!-- krk -->
+  <rect x="12.5" y="15" width="5" height="4" rx="2" fill="#34d399"/>
+  <!-- hlava -->
+  <circle cx="15" cy="11" r="8.5" fill="url(#wg)" filter="url(#ws)"/>
+  <!-- obličej highlight -->
+  <ellipse cx="12" cy="9" rx="3.5" ry="3" fill="rgba(255,255,255,.22)"/>
+  <!-- obrys hlavy -->
+  <circle cx="15" cy="11" r="8.5" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="1"/>
+  <!-- šipka směru — nahoru (nad hlavou) -->
+  <polygon points="15,0 20,4.5 10,4.5" fill="white" opacity=".95"/>
 </svg></div>`,
-      className:'', iconSize:[32,42], iconAnchor:[16,21],
+      className: '', iconSize: [30,44], iconAnchor: [15,22],
     });
   }
 }
@@ -499,12 +549,14 @@ function _buildNavMarkerIcon(hdgDeg, mode) {
 function _updatePosMarker(lat, lng, hdgDeg) {
   if (!_posMarker) {
     _posMarker = L.marker([lat, lng], {
-      icon: _buildNavMarkerIcon(hdgDeg, _navMode),
-      zIndexOffset: 1200,
+      icon:           _buildNavMarkerIcon(hdgDeg, _navMode),
+      zIndexOffset:   1200,
+      rotateWithView: false,  // My rotujeme ručně přes heading
+      interactive:    false,
     }).addTo(map);
   } else {
     _posMarker.setLatLng([lat, lng]);
-    // Aktualizuj rotaci v DOM bez rebuild ikony
+    // Aktualizuj rotaci přímým DOM zápisem — bez rebuild ikony (plynulé)
     const el = _posMarker.getElement();
     if (el) {
       const inner = el.querySelector('.nav-pos-marker');

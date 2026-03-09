@@ -32,20 +32,17 @@ const ST = {
 Object.keys(CAT_CFG).forEach(k => ST.catActive[k] = true);
 
 // ── IKONY ────────────────────────────────────────────────────────
-// fid = unique filter ID (bez kolizí když je 30+ ikon na mapě)
 let _iconSeq = 0;
 function makeIcon(emoji, color, sz = 33) {
   const s = sz;
   const fid = 'f' + (++_iconSeq);
-  // .poi-north-keep: CSS counter-rotace přes --map-bearing proměnnou (map.js)
-  // zajistí že pin vždy stojí vzpřímeně i při rotaci mapy 2 prsty
   return L.divIcon({
-    html: `<div class="poi-north-keep"><svg xmlns="http://www.w3.org/2000/svg" width="${s}" height="${s+8}" viewBox="0 0 ${s} ${s+8}">
-      <defs><filter id="${fid}"><feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="${color}" flood-opacity=".45"/></filter></defs>
-      <circle cx="${s/2}" cy="${s/2}" r="${s/2-1.5}" fill="${color}" filter="url(#${fid})" opacity=".95"/>
-      <circle cx="${s/2}" cy="${s/2}" r="${s/2-5}" fill="rgba(255,255,255,.12)"/>
-      <text x="${s/2}" y="${s/2+5}" text-anchor="middle" font-size="${Math.round(s*.38)}">${emoji}</text>
-      <line x1="${s/2}" y1="${s-1.5}" x2="${s/2}" y2="${s+6}" stroke="${color}" stroke-width="1.8" opacity=".45"/>
+    html: `<div class="poi-pin"><svg xmlns="http://www.w3.org/2000/svg" width="${s}" height="${s+8}" viewBox="0 0 ${s} ${s+8}">
+      <defs><filter id="${fid}"><feDropShadow dx="0" dy="2" stdDeviation="2.2" flood-color="${color}" flood-opacity=".5"/></filter></defs>
+      <circle cx="${s/2}" cy="${s/2}" r="${s/2-1.5}" fill="${color}" filter="url(#${fid})" opacity=".97"/>
+      <circle cx="${s/2}" cy="${s/2}" r="${s/2-5.5}" fill="rgba(255,255,255,.14)"/>
+      <text x="${s/2}" y="${s/2+5}" text-anchor="middle" font-size="${Math.round(s*.4)}">${emoji}</text>
+      <line x1="${s/2}" y1="${s-1.5}" x2="${s/2}" y2="${s+7}" stroke="${color}" stroke-width="2" opacity=".5"/>
     </svg></div>`,
     className: '', iconSize: [s, s+8], iconAnchor: [s/2, s+8], popupAnchor: [0, -(s+8)],
   });
@@ -117,14 +114,8 @@ function toggleSubList() {
 
 // ── RENDEROVÁNÍ ──────────────────────────────────────────────────
 function renderPOI() {
-  // 1) Standardní cleanup přes Leaflet API
+  // Standardní cleanup — poiGroup.clearLayers() odstraní všechny markery
   poiGroup.clearLayers();
-
-  // 2) Paranoidní DOM cleanup — leaflet-rotate může zanechat ghost elementy
-  //    .poi-north-keep je naše třída (makeIcon), takže je selektivní
-  document.querySelectorAll('.leaflet-marker-icon .poi-north-keep').forEach(el => {
-    el.closest('.leaflet-marker-icon')?.remove();
-  });
 
   if (typeof advancedMode !== 'undefined' && advancedMode) return;
 
@@ -143,16 +134,17 @@ function renderPOI() {
     if (sc) { color = sc.color; icon = sc.icon; }
 
     const [lng, lat] = f.geometry.coordinates;
-    const m = L.marker([lat, lng], { icon: makeIcon(icon, color) });
+    const m = L.marker([lat, lng], {
+      icon: makeIcon(icon, color),
+      rotateWithView: false,   // leaflet-rotate: PIN vždy vzpřímeně bez ohledu na bearing
+      interactive: true,
+    });
     m.feature = f;
-    m.bindPopup(buildPOIPopup(p, color, icon, lat, lng), { maxWidth: 360, minWidth: 300 });
+    m.bindPopup(buildPOIPopup(p, color, icon, lat, lng), { maxWidth: 280, minWidth: 220 });
     poiGroup.addLayer(m);
   });
 
-  // Aplikuj counter-rotaci na nové ikony (pokud je mapa otočená)
-  if (typeof _applyPoiCounterRotation === 'function') {
-    _applyPoiCounterRotation(typeof _mapBearing !== 'undefined' ? _mapBearing : 0);
-  }
+  // Žádná counter-rotace není potřeba — rotateWithView:false to řeší
 }
 
 // ── POI POPUP ────────────────────────────────────────────────────
@@ -192,8 +184,8 @@ function buildPOIPopup(p, color, icon, lat, lng) {
     ${rows ? `<div class="ppop-div"></div><div style="padding-bottom:6px">${rows}</div>` : ''}
     <div class="ppop-foot">
       <button class="ppop-btn nav" onclick="navigateTo(${lat},${lng},'${safeName}')">🧭 Navigovat</button>
-      <button class="ppop-btn" onclick="window.open('${navGoogle}','_blank')">🗺 Google</button>
-      ${p.web ? `<button class="ppop-btn" onclick="window.open('${p.web}','_blank')">🌐 Web</button>` : ''}
+      <button class="ppop-btn" onclick="window.open('${navGoogle}','_blank')">🗺 Otevřít v Google Maps</button>
+      ${p.web ? `<button class="ppop-btn" onclick="window.open('${p.web}','_blank')">🌐 Webová stránka</button>` : ''}
     </div>`;
 }
 

@@ -56,29 +56,21 @@ map.createPane('navPane');
 map.getPane('navPane').style.zIndex = '450';
 map.getPane('navPane').style.pointerEvents = 'none'; // kliknutí prochází přes trasu
 
-// ── CSS proměnná + přímé DOM counter-rotace POI ikon ────────────
-// CSS calc(var * unit) nefunguje → rotujeme JS přímým stylem
-// map.js volá _applyPoiCounterRotation() při každé rotaci mapy
+// ── Bearing sync — pro _syncNorthBtn v nav.js ────────────────────
+// leaflet-rotate plugin zajistí rotaci markerPane; POI markery mají
+// rotateWithView:false takže se neotáčí automaticky.
+// Nav marker rotujeme ručně přes heading.
+// Proměnná _mapBearing udržuje aktuální bearing pro případné použití.
 let _mapBearing = 0;
 
-function _applyPoiCounterRotation(bearing) {
-  _mapBearing = bearing || 0;
-  const deg   = -_mapBearing;
-  const tfm   = `rotate(${deg}deg)`;
-  // Aktualizuj všechny existující POI ikony
-  document.querySelectorAll('.poi-north-keep').forEach(el => {
-    el.style.transform = tfm;
-  });
-  // Aktualizuj CSS proměnnou pro nové ikony (přes CSS přímou hodnotu)
-  document.documentElement.style.setProperty('--map-bearing-neg', deg + 'deg');
+function _onMapRotate() {
+  _mapBearing = (typeof map.getBearing === 'function') ? (map.getBearing() || 0) : 0;
 }
-
-// Inicializace na 0
-_applyPoiCounterRotation(0);
+_onMapRotate();
 
 if (_rotatePlugin) {
-  map.on('rotate',    () => _applyPoiCounterRotation((typeof map.getBearing==='function') ? map.getBearing() : 0));
-  map.on('rotateend', () => _applyPoiCounterRotation((typeof map.getBearing==='function') ? map.getBearing() : 0));
+  map.on('rotate',    _onMapRotate);
+  map.on('rotateend', _onMapRotate);
 }
 
 // ── PODKLADOVÉ MAPY ──────────────────────────────────────────────
