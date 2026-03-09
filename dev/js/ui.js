@@ -4,7 +4,9 @@
 //  ui.js — Sidebar/BS, mobile search, geolokace live, init
 // ════════════════════════════════════════════════════════════════
 
-function isMobile() { return window.innerWidth <= 768; }
+function isMobile()        { return window.innerWidth <= 768; }
+// Landscape mobile: šířka > výška a max 900px — sidebar jako desktop
+function isLandscapeMob()  { return window.innerWidth <= 900 && window.innerWidth > window.innerHeight; }
 
 // ════════════════════════════════════════════════════════════════
 //  BOTTOM SHEET — plynulý JS drag
@@ -138,10 +140,13 @@ function _initBSSwipe() {
 //  SIDEBAR DESKTOP TOGGLE
 // ════════════════════════════════════════════════════════════════
 function toggleSB() {
-  if (isMobile()) { toggleBS(); return; }
+  // Portrait mobile → bottom sheet; landscape mobile → desktop sidebar
+  if (isMobile() && !isLandscapeMob()) { toggleBS(); return; }
   sbOpen = !sbOpen;
   const sb = document.getElementById('sidebar');
   sb?.classList.toggle('closed', !sbOpen);
+  // Landscape: body class řídí šířku tilt-wrap přes CSS
+  if (isLandscapeMob()) document.body.classList.toggle('ls-sb-closed', !sbOpen);
   const h = document.getElementById('sb-handle');
   if (h) { h.classList.toggle('closed', !sbOpen); h.textContent = sbOpen ? '◀' : '▶'; }
   document.getElementById('sb-hbtn')?.classList.toggle('on', sbOpen);
@@ -168,7 +173,17 @@ function closeMobSearch() {
 //  LAYOUT POSITIONS (desktop)
 // ════════════════════════════════════════════════════════════════
 function updateLayoutPositions() {
-  if (isMobile()) return;
+  const landMob = isLandscapeMob();
+  // Portrait mobile: přeskočit (pozice řeší CSS)
+  if (isMobile() && !landMob) return;
+  // Landscape mobile: sidebar vždy 210px (CSS --ls-sw); inline styl nepotřeba —
+  // elementy jsou fixovány CSS calc() → pouze scale marginLeft
+  if (landMob) {
+    const scale = document.querySelector('.leaflet-bottom.leaflet-left');
+    if (scale) scale.style.marginLeft = '';
+    return;
+  }
+  // Desktop
   const offset = sbOpen ? 285 : 0;
   const scale  = document.querySelector('.leaflet-bottom.leaflet-left');
   if (scale) scale.style.marginLeft = offset + 'px';

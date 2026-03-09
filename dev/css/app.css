@@ -899,20 +899,24 @@ body.map-rotated #fab-north { display: flex; opacity: 1; transition: opacity .35
   .tbtn      { padding: 3px 7px; font-size: .61rem; height: 26px; }
   #tile-sw   { border-radius: 6px; }
 
-  /* ── Mapa — začíná za sidebarem ── */
+  /* ── Mapa — začíná za sidebarem, plynulý přechod při toggle ── */
   #tilt-wrap {
     position: absolute !important;
     top: var(--hdr) !important;
     left: var(--ls-sw) !important;
     right: 0 !important;
     bottom: 0 !important;
+    transition: left .28s cubic-bezier(.4,0,.2,1);
+  }
+  /* Sidebar zavřený — mapa rozšíří na plnou šířku (třídu přidává JS) */
+  body.ls-sb-closed #tilt-wrap {
+    left: 0 !important;
   }
 
   /* ── Sidebar → levý panel (jako desktop, ale užší) ──
      Přebíjíme portrait-mobile bottom-sheet styl.
      Sidebar je vždy viditelný, žádný swipe/peek. ── */
-  #sidebar,
-  #sidebar.closed {
+  #sidebar {
     position: absolute !important;
     top: var(--hdr) !important;
     left: 0 !important;
@@ -925,8 +929,14 @@ body.map-rotated #fab-north { display: flex; opacity: 1; transition: opacity .35
     border-top: none !important;
     border-radius: 0 !important;
     transform: none !important;
+    transition: transform .28s cubic-bezier(.4,0,.2,1) !important;
     overflow-y: auto !important;
     overflow-x: hidden !important;
+  }
+  /* Zavřený sidebar: sjede doleva */
+  #sidebar.closed {
+    transform: translateX(-100%) !important;
+    transition: transform .28s cubic-bezier(.4,0,.2,1) !important;
   }
 
   /* Drag pill — schovaný (sidebar se neposouvá) */
@@ -992,30 +1002,9 @@ body.map-rotated #fab-north { display: flex; opacity: 1; transition: opacity .35
   }
 
   /* ── Countery — uprostřed dole mapové plochy ── */
-  #poi-overview {
-    display: flex !important;
-    bottom: 6px !important;
-    left: calc(var(--ls-sw) + (100vw - var(--ls-sw)) / 2) !important;
-    transform: translateX(-50%) !important;
-    font-size: .6rem !important;
-    padding: 3px 8px !important;
-    gap: 4px !important;
-    max-width: calc(100vw - var(--ls-sw) - 80px) !important;
-    flex-wrap: nowrap !important;
-    overflow: hidden !important;
-  }
-  .poi-ov-total { font-size: .62rem !important; }
-  .poi-ov-cat   { font-size: .62rem !important; }
-
-  #stats-panel {
-    bottom: 6px !important;
-    left: calc(var(--ls-sw) + (100vw - var(--ls-sw)) / 2) !important;
-    transform: translateX(-50%) !important;
-    font-size: .6rem !important;
-    padding: 4px 10px !important;
-    gap: 10px !important;
-  }
-  #stats-panel.adv-show { display: flex !important; }
+  /* Countery skryté v landscape — málo místa ve výšce */
+  #poi-overview { display: none !important; }
+  #stats-panel  { display: none !important; }
 
   /* ── Zoom — skryté (prsty / gesture) ── */
   .leaflet-control-zoom { display: none !important; }
@@ -1098,13 +1087,28 @@ body.map-rotated #fab-north { display: flex; opacity: 1; transition: opacity .35
     padding: 7px 12px 6px !important;
   }
 
-  /* ── Nav mode picker — scrollovatelný pokud přeteče ── */
+  /* ── Nav mode picker — kompaktní v landscape ── */
+  #nav-mode-picker {
+    /* overlay pokrývá celou obrazovku, ale karta je vlevo od sidebaru */
+    padding-left: var(--ls-sw);
+  }
   #nmp-card {
+    width: min(300px, calc(100vw - var(--ls-sw) - 20px)) !important;
+    padding: 12px 14px 10px;
+    gap: 7px;
+    border-radius: 12px;
     max-height: calc(100vh - 16px);
     overflow-y: auto;
-    padding: 14px 14px 12px;
-    border-radius: 14px;
   }
+  .nmp-title  { font-size: .88rem; }
+  .nmp-dest   { font-size: .7rem; }
+  .nmp-opts   { gap: 7px; }
+  .nmp-opt    { padding: 10px 7px 9px; border-radius: 10px; gap: 3px; }
+  .nmp-ico    { font-size: 1.5rem; }
+  .nmp-lbl    { font-size: .76rem; }
+  .nmp-time   { font-size: .9rem; }
+  .nmp-sub    { font-size: .6rem; }
+  .nmp-cancel { padding: 6px; font-size: .7rem; }
 
   /* ── Příjezdový modal — kompaktnější ── */
   #nav-arrived-card {

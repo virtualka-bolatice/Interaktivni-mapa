@@ -521,8 +521,6 @@ function _buildNavMarkerIcon(hdgDeg, mode) {
       <stop offset="100%" stop-color="#1d4ed8"/>
     </linearGradient>
   </defs>
-  <!-- stín -->
-  <ellipse cx="18" cy="49" rx="11" ry="2.8" fill="rgba(0,0,0,.30)"/>
   <!-- karoserie základna -->
   <path d="M5,14 Q5,6 13,5 L23,5 Q31,6 31,14 L31,40 Q31,46 23,46 L13,46 Q5,46 5,40 Z"
         fill="url(#cg)" filter="url(#cs)"/>
@@ -553,8 +551,6 @@ function _buildNavMarkerIcon(hdgDeg, mode) {
   <!-- obrys blysk -->
   <path d="M5,14 Q5,6 13,5 L23,5 Q31,6 31,14 L31,40 Q31,46 23,46 L13,46 Q5,46 5,40 Z"
         fill="none" stroke="rgba(255,255,255,.30)" stroke-width="1"/>
-  <!-- šipka směru — bílá nahoru -->
-  <polygon points="18,0 23,6.5 13,6.5" fill="white" opacity=".95"/>
 </svg></div>`,
       className: '', iconSize: [36,52], iconAnchor: [18,26],
     });
