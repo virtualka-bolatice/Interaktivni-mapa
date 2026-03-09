@@ -232,7 +232,10 @@ function _onGeoUpdate(pos) {
   _geoActive    = true;
   _bestAccuracy = Math.min(_bestAccuracy, acc);
 
-  _updateGeoMarker(lat, lng, acc);
+  // Během navigace skrývám geo marker — nav.js má vlastní position marker
+  if (!document.body.classList.contains('nav-on')) {
+    _updateGeoMarker(lat, lng, acc);
+  }
 
   // Zobraz nav tlačítko při prvním fixu
   document.getElementById('nav-pick-btn')?.classList.add('on');
@@ -242,12 +245,6 @@ function _onGeoUpdate(pos) {
 
 function _updateGeoMarker(lat, lng, acc) {
   const accR = Math.min(acc, 200); // nezobrazuj obří kruhy
-  // Během aktivní navigace geo marker skrýváme — nav má vlastní marker
-  if (document.body.classList.contains('nav-on')) {
-    if (_geoMarker) { try { map.removeLayer(_geoMarker); } catch(e){} _geoMarker = null; }
-    if (_geoCircle) { try { map.removeLayer(_geoCircle); } catch(e){} _geoCircle = null; }
-    return;
-  }
 
   if (!_geoMarker) {
     const ico = L.divIcon({
@@ -287,6 +284,15 @@ function hideGeoVisuals() {
   if (_geoMarker) { try { map.removeLayer(_geoMarker); } catch(e){} _geoMarker = null; }
   if (_geoCircle) { try { map.removeLayer(_geoCircle); } catch(e){} _geoCircle = null; }
   // _geoActive zůstane true, watchPosition pokračuje
+}
+
+// Obnov geo marker + kruh po ukončení navigace
+function showGeoVisuals() {
+  if (!_geoActive || !_geoLatLng) return;
+  // Krátký delay — nav-on třída se odstraní těsně předtím, marker se zobrazí správně
+  setTimeout(() => {
+    if (_geoLatLng) _updateGeoMarker(_geoLatLng.lat, _geoLatLng.lng, _bestAccuracy < Infinity ? _bestAccuracy : 25);
+  }, 100);
 }
 
 function _stopGeo() {

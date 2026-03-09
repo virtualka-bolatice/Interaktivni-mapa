@@ -458,30 +458,8 @@ body.nav-on #dbadge { display: none !important; }
   display: flex; align-items: center; justify-content: center; gap: 3px;
 }
 .nav-act-btn:hover  { border-color: var(--acc3); color: var(--acc3); }
-.nav-act-btn.follow-on { background: rgba(14,165,233,.15); border-color: var(--acc3); color: var(--acc3); }
 
-/* Kompas tlačítko — čtvercové, flex:0 */
-/* Nav widget kompas — výchozí skrytý */
-.nav-act-compass {
-  flex: 0 0 32px; padding: 4px; display: none;
-  transition: opacity .4s ease, background .2s, border-color .2s, color .2s;
-}
-/* Šedý stav: mapa otočená, čeká na akci */
-.nav-act-compass.compass-grey  {
-  display: flex;
-  border-color: var(--muted); color: var(--muted);
-}
-/* Zelený stav: mapa srovnána na sever */
-.nav-act-compass.compass-green {
-  display: flex;
-  background: rgba(16,185,129,.15); border-color: #10b981; color: #10b981;
-}
-/* Oranžový stav: bearing lock aktivní */
-.nav-act-compass.compass-orange {
-  display: flex;
-  background: rgba(249,115,22,.15); border-color: #f97316; color: #f97316;
-}
-/* Kompas SVG plynulá rotace s headingem */
+/* Nav widget kompas — nav-persp-btn — styly řeší JS inline */
 #nav-compass-svg { transition: transform .35s ease; }
 
 /* Recenter btn uvnitř widgetu — skrytý dokud uživatel nepohne mapou */
@@ -625,9 +603,9 @@ body.nav-on #dbadge { display: none !important; }
 #fab-nav        { display: none; background: rgba(14,165,233,.15); border-color: var(--acc3); color: var(--acc3); }
 #fab-nav.on     { display: flex; }
 /* North-reset: normálně skrytý, zobrazí se gdy je mapa otočená */
-#fab-north        { display: none; border-color: var(--acc3); color: var(--acc3); opacity: 0; transition: opacity .4s ease; }
+#fab-north        { display: none; border-color: #3b82f6; color: #3b82f6; opacity: 0; }
 #fab-north-svg    { transition: transform 0.3s ease; }
-body.map-rotated #fab-north { display: flex; opacity: 1; animation: fadeIn .25s ease; }
+body.map-rotated #fab-north { display: flex; opacity: 1; transition: opacity .35s ease; }
 
 /* ════════════════════════════════════════════════════════════════
    MĚŘICÍ PANEL

@@ -24,8 +24,9 @@ let _headingCone = null, _coneVisible = true;
 let _trackWatchId = null, _trackTarget = null;
 let _remDist = 0, _avgSpeedMS = 13.9;
 let _followMode = false, _lastHeading = null, _mapMoved = false, _lastValidHdg = 0;
-let _bearingLock = false;   // mapa sleduje heading
-let _compassState = 0;      // 0=hidden 1=aligned(green) 2=locked(orange)
+// Nav kompas: 0=skrytý, 1=modrý(otočeno), 2=modrý(srovnáno), 3=oranžový(lock)
+let _navCompassState = 0;
+let _bearingLock     = false;
 let _navStartTime = null, _navTotalDist = 0;  // statistiky pro arrival modal
 const _ZOOM_NAV = 17;
 
@@ -154,91 +155,88 @@ function navUpdateHeadingCone(lat, lng, heading) {
 }
 function navRemoveHeadingCone() { if (!_navActive) _removeHeadingCone(); }
 
-// Kompas SVG v nav-widgetu — rotuje s headingem
+// ── Kompas SVG (nav widget) — rotuje s headingem ─────────────────
 function _updateCompassIcon(hdgDeg) {
   const svg = document.getElementById('nav-compass-svg');
   if (svg) svg.style.transform = `rotate(${hdgDeg??0}deg)`;
 }
 
-// Rotace SVG kompasu v fab-north tlačítku (ukazuje otočení mapy)
+// ── fab-north SVG — rotuje s bearingem mapy ───────────────────────
 function _updateNorthFabIcon(bearingDeg) {
   const svg = document.getElementById('fab-north-svg');
   if (svg) svg.style.transform = `rotate(${-bearingDeg}deg)`;
 }
 
-// ── fab-north (vpravo dole, mimo navigaci) ───────────────────────
-// Funkce: šedý → klik → vyrovná mapu na sever → postupně zmizí
+// ── fab-north (vpravo dole, MIMO navigaci) ───────────────────────
+// Jediná funkce: srovnat mapu, pak tlačítko zmizí samo přes _syncNorthBtn
 function resetMapBearing() {
   if (typeof map.setBearing === 'function') {
     map.setBearing(0, { animate: true, duration: 0.4 });
   }
-  // Tlačítko zmizí samo přes _syncNorthBtn (odebere map-rotated)
 }
 
-// Udržuje map-rotated třídu + rotaci ikon obou kompasů
+// ── Sync: udržuje map-rotated + rotuje kompas ikony ──────────────
 function _syncNorthBtn() {
   const bearing = (typeof map.getBearing === 'function') ? (map.getBearing()||0) : 0;
-  document.body.classList.toggle('map-rotated', Math.abs(bearing) > 1.5);
+  const rotated = Math.abs(bearing) > 1.5;
+  document.body.classList.toggle('map-rotated', rotated);
   _updateNorthFabIcon(bearing);
-  // Při navigaci: pokud uživatel sám otočí mapu (bearing lock byl off),
-  // zobraz kompas v nav widgetu jako šedý (state 0)
-  if (_navActive && !_bearingLock && Math.abs(bearing) > 1.5) {
-    _setCompassState(0);  // zobrazí tlačítko šedě
-  } else if (_navActive && !_bearingLock && Math.abs(bearing) <= 1.5 && _compassState === 0) {
-    _hideNavCompass();    // mapa srovnána → skryj pokud byl šedý
+  // Nav kompas: auto-zobraz (modrý) když se mapa otočí a kompas je skrytý
+  if (_navActive && _navCompassState === 0 && rotated) {
+    _navCompassState = 1;
+    _applyNavCompassState();
   }
 }
 
 map.on('rotate',  _syncNorthBtn);
 map.on('moveend', _syncNorthBtn);
 
-// ── Nav widget kompas — 3 stavy ─────────────────────────────────
-// Stav 0 = šedý (viditelný jen při otočené mapě)
-// Stav 1 = zelený (mapa srovnána, lock OFF)
-// Stav 2 = oranžový (bearing lock ON, mapa sleduje heading)
-// Cyklus: šedý→klik→zelený→klik→oranžový→klik→reset+skrýt(→šedý až se mapa otočí)
-function _setCompassState(state) {
-  _compassState = state;
+// ── Nav widget kompas — 3 kliknutí ───────────────────────────────
+// Stav 0: skrytý
+// Stav 1: modrý (mapa otočena, zobrazeno auto nebo po resetu)
+// Stav 2: modrý (mapa srovnána, čeká na lock)
+// Stav 3: oranžový (bearing lock – mapa sleduje heading)
+function _applyNavCompassState() {
   const btn = document.getElementById('nav-persp-btn');
   if (!btn) return;
-  btn.classList.remove('compass-grey', 'compass-green', 'compass-orange');
-  if (state === 0) btn.classList.add('compass-grey');
-  if (state === 1) btn.classList.add('compass-green');
-  if (state === 2) btn.classList.add('compass-orange');
-  btn.style.display = (state >= 0) ? '' : 'none';
-}
-
-function _hideNavCompass() {
-  _compassState = -1;
-  _bearingLock = false;
-  const btn = document.getElementById('nav-persp-btn');
-  if (btn) {
-    btn.classList.remove('compass-grey', 'compass-green', 'compass-orange');
+  if (_navCompassState === 0) {
     btn.style.opacity = '0';
-    setTimeout(() => {
-      if (_compassState === -1) { btn.style.display = 'none'; btn.style.opacity = ''; }
-    }, 450);
+    btn.style.transition = 'opacity .4s ease';
+    setTimeout(() => { if (_navCompassState === 0) btn.style.display = 'none'; }, 420);
+  } else if (_navCompassState === 1 || _navCompassState === 2) {
+    btn.style.display = '';
+    btn.style.transition = 'opacity .25s ease, background .18s, border-color .18s, color .18s';
+    btn.style.opacity = '1';
+    btn.style.background = 'rgba(59,130,246,.15)';
+    btn.style.borderColor = '#3b82f6';
+    btn.style.color = '#3b82f6';
+  } else if (_navCompassState === 3) {
+    btn.style.display = '';
+    btn.style.opacity = '1';
+    btn.style.background = 'rgba(249,115,22,.15)';
+    btn.style.borderColor = '#f97316';
+    btn.style.color = '#f97316';
   }
 }
 
 function toggleNavCompass() {
-  if (_compassState <= 0) {
-    // Šedý → klik: vyrovnej na sever, zůstaň viditelný (zelená)
-    _bearingLock = false;
+  if (_navCompassState === 1) {
+    // Klik 1: srovnej mapu, přejdi do stavu 2 (modrý, čeká na lock)
     if (typeof map.setBearing === 'function') map.setBearing(0, { animate: true, duration: 0.4 });
-    _setCompassState(1);
-  } else if (_compassState === 1) {
-    // Zelený → klik: zapni bearing lock (oranžová)
+    _navCompassState = 2;
+    _applyNavCompassState();
+  } else if (_navCompassState === 2) {
+    // Klik 2: zapni bearing lock → oranžový
     _bearingLock = true;
-    if (typeof map.setBearing === 'function') {
-      map.setBearing(_lastValidHdg, { animate: true, duration: 0.4 });
-    }
-    _setCompassState(2);
-  } else {
-    // Oranžový → klik: vyrovnej + postupně skryj
+    if (typeof map.setBearing === 'function') map.setBearing(_lastValidHdg, { animate: true, duration: 0.4 });
+    _navCompassState = 3;
+    _applyNavCompassState();
+  } else if (_navCompassState === 3) {
+    // Klik 3: vypni lock, srovnej, skryj
     _bearingLock = false;
     if (typeof map.setBearing === 'function') map.setBearing(0, { animate: true, duration: 0.4 });
-    _hideNavCompass();
+    _navCompassState = 0;
+    _applyNavCompassState();
   }
 }
 
@@ -394,7 +392,6 @@ async function _startNav(tLat,tLng,tName,mode,driveRoute,walkRoute) {
   _showNavWidget(mode,tName,dur,dist);
   document.body.classList.add('nav-on');
   _navActive=true;
-  _compassState = -1; _bearingLock = false;  // kompas skrytý na začátku
   _navStartTime = Date.now();
   _navTotalDist = dist;
   // VŽDY skryj geo vizuály — marker + přesnostní kruh — navigace přebírá polohu
@@ -405,7 +402,10 @@ async function _startNav(tLat,tLng,tName,mode,driveRoute,walkRoute) {
   map.on('dragstart',_onMapDrag);
   _startTracking(tLat,tLng,tName);
   document.getElementById('fab-nav')?.classList.add('on');
-  document.getElementById('nav-persp-btn')?.classList.add('persp-on');
+  // Reset stavu nav kompasu — skrytý na začátku navigace
+  _navCompassState = 0; _bearingLock = false;
+  const _npBtn = document.getElementById('nav-persp-btn');
+  if (_npBtn) { _npBtn.style.display='none'; _npBtn.style.opacity=''; }
   // Geo FAB zašedí — navigace přebírá tracking
   document.getElementById('fab-geo')?.classList.add('nav-taking-over');
 }
@@ -559,36 +559,22 @@ function _buildNavMarkerIcon(hdgDeg, mode) {
       className: '', iconSize: [36,52], iconAnchor: [18,26],
     });
   } else {
-    // Chodec — hlava + ramena, výrazná zelená
+    // Chodec — pouze hlava (zelené kolečko), střed = pozice uživatele
     return L.divIcon({
-      html:`<div class="nav-pos-marker" style="transform:rotate(${rot}deg);transform-origin:50% 50%;width:30px;height:44px">
-<svg viewBox="0 0 30 44" width="30" height="44" xmlns="http://www.w3.org/2000/svg">
+      html:`<div class="nav-pos-marker" style="transform:rotate(${rot}deg);transform-origin:50% 50%;width:26px;height:26px">
+<svg viewBox="0 0 26 26" width="26" height="26" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <filter id="ws"><feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#065f46" flood-opacity=".55"/></filter>
+    <filter id="ws"><feDropShadow dx="0" dy="1.5" stdDeviation="2.5" flood-color="#065f46" flood-opacity=".6"/></filter>
     <linearGradient id="wg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%"   stop-color="#34d399"/>
       <stop offset="100%" stop-color="#059669"/>
     </linearGradient>
   </defs>
-  <!-- stín -->
-  <ellipse cx="15" cy="41.5" rx="9" ry="2.5" fill="rgba(0,0,0,.28)"/>
-  <!-- trup (ramena + hruď) -->
-  <path d="M4,26 Q4,19 15,18 Q26,19 26,26 L26,38 Q26,41 23,41 L7,41 Q4,41 4,38 Z"
-        fill="url(#wg)" filter="url(#ws)"/>
-  <!-- highlight na ramenou -->
-  <ellipse cx="15" cy="21" rx="9" ry="4.5" fill="rgba(255,255,255,.18)"/>
-  <!-- krk -->
-  <rect x="12.5" y="15" width="5" height="4" rx="2" fill="#34d399"/>
-  <!-- hlava -->
-  <circle cx="15" cy="11" r="8.5" fill="url(#wg)" filter="url(#ws)"/>
-  <!-- obličej highlight -->
-  <ellipse cx="12" cy="9" rx="3.5" ry="3" fill="rgba(255,255,255,.22)"/>
-  <!-- obrys hlavy -->
-  <circle cx="15" cy="11" r="8.5" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="1"/>
-  <!-- šipka směru — nahoru (nad hlavou) -->
-  <polygon points="15,0 20,4.5 10,4.5" fill="white" opacity=".95"/>
+  <circle cx="13" cy="13" r="11.5" fill="url(#wg)" filter="url(#ws)"/>
+  <circle cx="13" cy="13" r="11.5" fill="none" stroke="rgba(255,255,255,.4)" stroke-width="1.5"/>
+  <ellipse cx="10" cy="10" rx="3.8" ry="2.8" fill="rgba(255,255,255,.28)"/>
 </svg></div>`,
-      className: '', iconSize: [30,44], iconAnchor: [15,22],
+      className: '', iconSize: [26,26], iconAnchor: [13,13],
     });
   }
 }
@@ -725,9 +711,9 @@ function closeArrivedModal() {
 function clearNav() {
   _stopTracking();
   _navActive=false; _followMode=false; _navMode=null;
-  _bearingLock=false; _compassState=-1;
   _fetchedDriveRoute=_fetchedWalkRoute=_fetchedTarget=null;
   _lastValidHdg=0; _lastHeading=null;
+  _bearingLock=false; _navCompassState=0;
   _navStartTime=null; _navTotalDist=0;
   _updateCompassIcon(0);
   _removeHeadingCone();
@@ -746,10 +732,12 @@ function clearNav() {
   document.getElementById('nav-recenter-btn2')?.classList.remove('on');
   document.getElementById('nav-pick-btn')?.classList.remove('pick-active');
   document.getElementById('nav-follow-btn')?.classList.remove('follow-on');
-  const _cpBtn=document.getElementById('nav-persp-btn');
-  if(_cpBtn){_cpBtn.classList.remove('compass-grey','compass-green','compass-orange','persp-on');_cpBtn.style.display='none';_cpBtn.style.opacity='';}
-  // Obnov geo FAB do normálního stavu
+  // Skryj nav compass okamžitě
+  const _cp = document.getElementById('nav-persp-btn');
+  if (_cp) { _cp.style.display='none'; _cp.style.opacity=''; _cp.style.background=''; _cp.style.borderColor=''; _cp.style.color=''; }
+  // Obnov geo FAB + znovu zobraz geo marker
   document.getElementById('fab-geo')?.classList.remove('nav-taking-over');
+  if (typeof showGeoVisuals === 'function') showGeoVisuals();
   document.body.classList.remove('nav-on');
   if (typeof map.setBearing === 'function') map.setBearing(0);
   document.body.classList.remove('map-rotated');
