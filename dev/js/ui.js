@@ -234,8 +234,10 @@ function _onGeoUpdate(pos) {
 
   _updateGeoMarker(lat, lng, acc);
 
-  // Zobraz nav tlačítko při prvním fixu
-  document.getElementById('nav-pick-btn')?.classList.add('on');
+  // Zobraz nav tlačítko při prvním fixu (jen pokud navigace neběží)
+  if (!document.body.classList.contains('nav-on')) {
+    document.getElementById('nav-pick-btn')?.classList.add('on');
+  }
 
   // Zpřesňování polohy je tiché — žádné badge, žádné hlášky
 }
@@ -283,6 +285,16 @@ function hideGeoVisuals() {
   // _geoActive zůstane true, watchPosition pokračuje
 }
 
+// Obnov geo vizuál po ukončení navigace (pokud je geo stále aktivní)
+function restoreGeoVisuals() {
+  if (!_geoActive || !_geoLatLng) return;
+  _updateGeoMarker(_geoLatLng.lat, _geoLatLng.lng, _bestAccuracy < Infinity ? _bestAccuracy : 20);
+  // Zobraz nav-pick-btn zpět
+  setTimeout(() => {
+    document.getElementById('nav-pick-btn')?.classList.add('on');
+  }, 400);
+}
+
 function _stopGeo() {
   if (_geoWatchId !== null) {
     navigator.geolocation.clearWatch(_geoWatchId);
@@ -300,39 +312,6 @@ function _stopGeo() {
 function getGeoLatLng() {
   if (!_geoLatLng) return null;
   return L.latLng(_geoLatLng.lat, _geoLatLng.lng);
-}
-
-// ── GEO — deaktivace pro navigaci ────────────────────────────────
-// Navigace přebírá sledování polohy — "Moje poloha" se kompletně vypne
-function deactivateGeoForNav() {
-  if (_geoWatchId !== null) {
-    navigator.geolocation.clearWatch(_geoWatchId);
-    _geoWatchId = null;
-  }
-  clearTimeout(_geoSettleTimer);
-  hideGeoVisuals();
-  _geoActive    = false;
-  _bestAccuracy = Infinity;
-  const btn = document.getElementById('fab-geo');
-  if (btn) {
-    btn.classList.remove('on');
-    btn.style.display = 'none';   // úplně skryj po dobu navigace
-  }
-}
-
-// Obnov "Moje poloha" po ukončení navigace — automaticky znovu spusť geo
-function reactivateGeoAfterNav() {
-  const btn = document.getElementById('fab-geo');
-  if (btn) {
-    btn.style.display = '';
-    btn.classList.remove('on', 'nav-taking-over', 'geo-nav-disabled');
-  }
-  // Auto-restart sledování polohy
-  if (navigator.geolocation) {
-    _geoActive    = false;
-    _bestAccuracy = Infinity;
-    geolocate();   // zapne watchPosition a badge "Zjišťování polohy…"
-  }
 }
 
 // ════════════════════════════════════════════════════════════════
