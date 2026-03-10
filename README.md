@@ -51,7 +51,7 @@ foto/               ← fotografie POI
 | Posun | Klik a tažení |
 | Přiblížení / oddálení | `Scroll` nebo tlačítka `+` / `−` (vpravo dole) |
 | Přiblížení na oblast | `Shift` + tažení — vykreslí výběrový obdélník |
-| Rotace mapy | `Shift` + tažení pravým tlačítkem myši |
+| Rotace mapy | `Shift` + točení kolečkem na myši |
 | Reset severu | Tlačítko kompasu (zobrazí se při otočené mapě) |
 
 ### Postranní panel
@@ -116,7 +116,7 @@ POI jsou rozděleny do kategorií viditelných v bočním panelu:
 - Kliknutí na jinou kategorii → přepne výběr
 
 **Vyhledávání:**
-Do pole *Hledat v mapě* lze psát název místa nebo kategorie — výsledky se zobrazují v reálném čase. Na mobilním zařízení je vyhledávání dostupné přes ikonu 🔍 v záhlaví.
+Do pole *Hledat v mapě* lze psát název místa — výsledky se zobrazují v reálném čase. Na mobilním zařízení je vyhledávání dostupné přes ikonu 🔍 v záhlaví.
 
 **Popup POI** obsahuje:
 - Název, kategorii a subkategorii
@@ -147,14 +147,13 @@ Navigace využívá open-source routovací server **OSRM** a polohu zařízení 
 | Tlačítko | Funkce |
 |----------|--------|
 | **Vycentrovat** | Vrátí mapu na aktuální polohu (zobrazí se po ručním posunu) |
-| **🧭** | Zapne/vypne kužel pohledu |
 | **✕** | Ukončí navigaci |
 
 Po dosažení cíle (do 25 m) se zobrazí příjezdový modal se statistikami jízdy (čas, vzdálenost, způsob dopravy).
 
 #### Ukončení navigace
 
-Tlačítkem **✕** v navigačním widgetu nebo FAB tlačítkem 🔴 v pravém dolním rohu.
+Tlačítkem **✕** v navigačním widgetu nebo **✕** tlačítkem v pravém dolním rohu.
 
 ---
 
@@ -180,21 +179,16 @@ Zobrazí vrstvy z **Informačního systému digitální mapy veřejné správy**
 
 **Budovy**
 - Hranice budov
-- Budovy (různé typy dle klasifikace IS DMVS)
 
 **Doprava**
 - Parkoviště a odstavné plochy
-- Provozní plochy pozemních komunikací
-- Obvod dráhy / obvod pozemní komunikace
 - Chodníky
-- Plocha železničních drah
 - Cyklostezky
+- Hřiště
 
 Každou vrstvu lze zapnout/vypnout přepínačem. Po zapnutí se zobrazí posuvník průhlednosti (0–100 %).
 
 Kliknutím na objekt se otevře popup s dostupnými atributy z IS DMVS (plocha, datum vkladu, ID stavby).
-
-Po opuštění pokročilého režimu se vrstvy automaticky vypnou a obnoví se předchozí stav kategorií POI. Rotace mapy je v pokročilém režimu zablokována a mapa se automaticky vyrovná na sever.
 
 ---
 
