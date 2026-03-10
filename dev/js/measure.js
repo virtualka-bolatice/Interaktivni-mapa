@@ -56,7 +56,7 @@ function msrUpdate() {
     document.getElementById('msr-hint').textContent = `obvod: ${lenStr}`;
   } else if (mPts.length >= 3) {
     document.getElementById('msr-area').textContent = msrFormatArea(msrCalcArea(mPts)) + ' est.';
-    document.getElementById('msr-hint').textContent = 'Enter nebo ⬡ → uzavřít plochu';
+    document.getElementById('msr-hint').textContent = 'Enter → uzavřít plochu';
   } else {
     document.getElementById('msr-area').textContent = '—';
     document.getElementById('msr-hint').textContent = 'klikej body na mapě';
@@ -141,7 +141,7 @@ function clearMsr() {
 
   document.getElementById('msr-val').textContent  = '0 m';
   document.getElementById('msr-area').textContent = '—';
-  document.getElementById('msr-hint').textContent = 'klikej body · Enter nebo ⬡ → uzavřít';
+  document.getElementById('msr-hint').textContent = 'klikej body · Enter → uzavřít';
   document.getElementById('msr-panel').classList.remove('on');
   document.getElementById('fab-msr').classList.remove('on');
 
